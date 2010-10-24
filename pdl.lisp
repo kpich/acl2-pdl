@@ -26,7 +26,8 @@
 ; So each relation is a list of list of integers, the ith element of which
 ; specifies the list of arcs coming out of node i (each element in the list
 ; that's the ith element of the relation will be an integer uniquely
-; representing the destination node).
+; representing the destination node). The name of the relation must be a
+; symbol.
 (defun make-rel (name edges)
   (cons name edges))
 (defun get-rel-name (rel) (car rel))
@@ -35,10 +36,10 @@
 ; a list of these rel's is an association list with names as values.
 
 ; convenience functions for making a frame and getting its two
-; components. Num-nodes has to be an integer; atomic-programs should be a list
-; of rels (each of which is made by make-rel).
-(defun make-frame (num-nodes atomic-programs)
-  (list num-nodes atomic-programs))
+; components. Num-nodes has to be an integer; atomic-program-extensions should
+; be a list of rels (each of which is made by make-rel).
+(defun make-frame (num-nodes atomic-program-extensions)
+  (list num-nodes atomic-program-extensions))
 (defun get-num-nodes (f) (nth 0 f))
 (defun get-atomic-programs (f) (nth 1 f))
 
@@ -69,18 +70,10 @@
              (integer-list-list-alistp (cdr ali)))
       nil)))
 
-; assuming ali is an alist.
-(defun keys-are-all-strings (ali)
-  (if (endp ali)
-      t
-    (if (stringp (caar ali))
-        (keys-are-all-strings (cdr ali))
-      nil)))
-
 (defun rels-well-formed (rels len)
   (and (rels-of-proper-len rels len)
        (integer-list-list-alistp rels)
-       (keys-are-all-strings rels)))
+       (symbol-alistp rels)))
 
 ; predicate function for frames. The relations must all have the appropriate
 ; number of nodes and format.
@@ -88,36 +81,50 @@
   (and (integerp (get-num-nodes f))
        (rels-well-formed (get-atomic-programs f) (get-num-nodes f))))
 
- 
-; each propositional atom is going to be a string. Two propositional atoms are
-; equal iff their strings are equal. A valuation is going to be a list of lists
-; of such strings, the ith element of which corresponds to the list of those and
-; only those propositional atoms which hold true at world i in the frame.
+
+; A valuation is going to be a list of lists of symbols. Element i in this list
+; will enumerate those and only those propositional atoms which hold at world
+; i. Each element of list i will be a list of symbols corresponding to atoms.
+; 
+; The parameter prop-atoms is a the set of all propositional atoms (so, \forall
+; X \in valuation [ X \subseteq prop-atoms ]).
+;
+; Similarly, prog-atoms is the set of all atomic programs.
 ;
 ; we make a model from a frame and a valuation.
-(defun make-model (frame valuation)
-  (list frame valuation))
+(defun make-model (frame valuation prop-atoms prog-atoms)
+  (list frame valuation prop-atoms prog-atoms))
 (defun get-frame (m) (nth 0 m))
 (defun get-valuation (m) (nth 1 m))
+(defun get-prop-atoms (m) (nth 2 m))
+(defun get-prog-atoms (m) (nth 3 m))
 
 ; returns t if li is a list of true-listps of strings, nil otherwise.
-(defun string-list-listp (li)
+(defun symbol-list-listp (li)
   (if (endp li)
       t
-    (and (string-listp (car li))
-         (string-list-listp (cdr li)))))
+    (and (symbol-listp (car li))
+         (symbol-list-listp (cdr li)))))
+
+(defun valuation-syms-all-in-prop-atoms (v prop-atoms)
+  (if (endp v)
+      t
+    (and (subsetp (car v) prop-atoms)
+         (valuation-syms-all-in-prop-atoms (cdr v) prop-atoms))))
 
 ; predicate for valuations. This takes a valuation and an integer value
 ; representing the number of worlds each valuation should contain.
-(defun proper-valuationp (v len)
+(defun proper-valuationp (v len prop-atoms)
   (and (equal (len v) len)
-       (string-list-listp v)))
+       (symbol-list-listp v)
+       (valuation-syms-all-in-prop-atoms v prop-atoms)))
 
 ; predicate for models. Has to have a valid frame and a valid valuation.
 (defun modelp (m)
   (and (framep (get-frame m))
        (proper-valuationp (get-valuation m)
-                          (get-num-nodes (get-frame m)))))
+                          (get-num-nodes (get-frame m))
+                          (get-prop-atoms m))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; FORMULAS
@@ -129,9 +136,9 @@
 (defun pdl-symbolp (s)
   (and (symbolp s)
        (not (member s '(~ v ^ -> not 
-                          diamond box 
-                          true false 
-                          union star compose)))))
+                        diamond box 
+                        true false 
+                        union star compose)))))
 
 (defun pdl-programp (p prog-atoms)
   (cond ((symbolp p)
