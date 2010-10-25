@@ -15,6 +15,17 @@
 ;   limitations under the License.
 
 
+; So this is a formalization of a finite version of Propositional Dynamic
+; Logic. Right now it's actually PDL as given in Blackburn et al, so it doesn't
+; have tests (the ? operator). We'll maybe want to try adding in tests later
+; (since they do increase the expressivity of the language). 
+; 
+; Also, we are constrained to have finite frames, a finite number of atomic
+; programs, and a  finite number of propositional variables (since represent
+; each of the above as lists). There is, nonetheless, no shortage of
+; interesting things to prove about the language, even given it has no tests
+; and a finite number of worlds and atomic programs.
+
 
 (in-package "ACL2")
 
@@ -46,11 +57,11 @@
 ; takes an assoc list of rels and an int l. returns t if the relations in the
 ; assoc list (i.e. the cdr of each elem) are all of the length l, nil
 ; otherwise.
-(defun rels-of-proper-len (rels l)
+(defun rels-are-proper-len (rels l)
   (if (endp rels)
       t
     (if (equal (len (get-rel-nodes (car rels))) l)
-        (rels-of-proper-len (cdr rels) l)
+        (rels-are-proper-len (cdr rels) l)
       nil)))
 
 (defun integer-list-listp (li)
@@ -70,16 +81,49 @@
              (integer-list-list-alistp (cdr ali)))
       nil)))
 
-(defun rels-well-formed (rels len)
-  (and (rels-of-proper-len rels len)
+; takes a single list of ints, returns nonnil iff they're all natural numbers
+; which are less than len (this corresponds to each outgoing arc in a part of a
+; relation going to a node that actually exists in our model).
+(defun indiv-rel-node-has-appropriate-values (rel-node len)
+  (if (consp rel-node)
+      (if (and (natp (car rel-node))
+               (< (car rel-node) len))
+          (indiv-rel-node-has-appropriate-values (cdr rel-node) len)
+        nil)
+    t))
+
+; takes a single list of rel-nodes (the list of lists of ints) and the number
+; of worlds in the model (len), returns t if all values in rel-nodes are
+; appropriate, and nil otherwise.
+(defun indiv-rel-has-appropriate-values (rel-nodes len)
+  (if (consp rel-nodes)
+      (if (indiv-rel-node-has-appropriate-values (car rel-nodes) len)
+          (indiv-rel-has-appropriate-values (cdr rel-nodes) len)
+        nil)
+    t))
+
+; takes the alist of relations (mapping symbols to lists of lists of ints)
+; and ensures each value on the "inside" (the ints at the bottom of the
+; structure) take appropriate values (that is for each int X in the innermost
+; list, 0 <= X < len). Len is the number of worlds.
+(defun rel-extensions-have-appropriate-values (rels len)
+  (if (endp rels)
+      t
+    (if (indiv-rel-has-appropriate-values (get-rel-nodes (car rels)) len)
+        (rel-extensions-have-appropriate-values (cdr rels) len)
+      nil)))
+
+(defun rels-are-well-formed (rels len)
+  (and (rels-are-proper-len rels len)
        (integer-list-list-alistp rels)
-       (symbol-alistp rels)))
+       (symbol-alistp rels)
+       (rel-extensions-have-appropriate-values rels len)))
 
 ; predicate function for frames. The relations must all have the appropriate
 ; number of nodes and format.
 (defun framep (f)
   (and (integerp (get-num-nodes f))
-       (rels-well-formed (get-atomic-programs f) (get-num-nodes f))))
+       (rels-are-well-formed (get-atomic-programs f) (get-num-nodes f))))
 
 
 ; A valuation is going to be a list of lists of symbols. Element i in this list
@@ -125,6 +169,19 @@
        (proper-valuationp (get-valuation m)
                           (get-num-nodes (get-frame m))
                           (get-prop-atoms m))))
+
+; takes a model m and a world w and returns t if w represents a valid world in
+; m, nil otherwise. We represent a world just as an integer -- it must be less
+; than the number of worlds in the model.
+(defun world-valid-in-model (m w)
+  (and (integerp w)
+       (< w (get-num-nodes (get-frame m)))))
+
+; takes a model m and a world w and returns the list of propositional atoms
+; which hold at that particular world. Assumes m is wellformed (i.e. (modelp
+; m)) and w is appropriate for it (i.e. (world-valid-in-model m w)).
+(defun get-prop-atoms-true-at-world (m w)
+  (nth w (get-valuation m)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; FORMULAS
@@ -173,3 +230,55 @@
                     (pdl-programp second prog-atoms)
                     (pdl-formulap third prop-atoms prog-atoms)))))
         (t nil)))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; SEMANTICS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;we assume m, w, f are wellformed.
+(defun pdl-satisfies-symbol (m w f)
+  (cond ((equal f 'true) t)
+        ((equal f 'false) nil)
+        (t (if (member f (get-prop-atoms-true-at-world m w))
+               t
+             nil))))
+
+
+; Pointwise modal valuation. (pdl-satisfies M w phi) iff $M, w \models phi$.
+; That is, if pdl formula f is satisfied at world w of model m, then this will
+; return t, otherwise it will return nil.
+;
+; For now, we return nil if m, w, or f aren't valid. We may have to reassess
+; this.
+(defun pdl-satisfies (m w f)
+  (if (and (modelp m)
+           (world-valid-in-model m w)
+           (pdl-formulap f
+                         (get-prop-atoms m)
+                         (get-prog-atoms m)))
+      (cond ((symbolp f)
+             (pdl-satisfies-symbol m w f))
+            ((equal (len f) 2)
+             (not (pdl-satisfies m w (second f))))
+            ((equal (len f) 3)
+             (cond ((equal (first f) 'v)
+                    (or (pdl-satisfies m w (second f))
+                        (pdl-satisfies m w (third f))))
+;TODO diamond semantics.
+                   ((equal (first f) 'diamond) nil)))
+            (t nil))
+    nil))
+
+
+
+
+
+;TODO function to translation from (box, diamond, ->, v, ^, ~) to (diamond,
+;v,~).
+
+
+;TODO could prove some basic statements about semantics, e.g.
+; (iff (pdl-satisfies m w '(~ f)) (not (pdl-satisfies m w f))). These will be
+; interesting if we do indeed end up only defining semantics for (~,v,<>).

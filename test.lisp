@@ -14,15 +14,18 @@
 ;   See the License for the specific language governing permissions and
 ;   limitations under the License.
 
+
+; note that the names of the theorems are completely meaningless.
+
 (defthm test1
-  (rels-of-proper-len (list (make-rel 'a 
+  (rels-are-proper-len (list (make-rel 'a 
                                       '(nil (0) (0 1) nil (0 1 2 3 4)))
                             (make-rel 'b 
                                       '(nil (0) (0 1 2) nil (0 1 2))))
                       5))
 
 (defthm test2 
-  (not (rels-of-proper-len (list (make-rel 'a 
+  (not (rels-are-proper-len (list (make-rel 'a 
                                            '(nil (0) (0 1) nil (0 1 2 3 4)))
                                  (make-rel 'b 
                                            '(nil (0 1 2) nil (0 1 2))))
@@ -50,18 +53,23 @@
   (not (integer-list-list-alistp '(1 2 3))))
 
 (defthm test7 
-  (rels-of-proper-len (list (make-rel 'a
+  (rels-are-proper-len (list (make-rel 'a
                                       '(nil (0) (0 1) nil (0 1 2 3 4))))
                       5))
 
 (defthm test8
-  (not (rels-of-proper-len
+  (not (rels-are-proper-len
         (list (make-rel 'foo '(nil (0) (0 1) nil (0 1 2 3 4))))
         4)))
 
 (defthm test12
-  (rels-well-formed (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4))))
+  (rels-are-well-formed (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4))))
                     5))
+
+(defthm test12a
+  (not (rels-are-well-formed
+        (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 6 4))))
+        5)))
 
 (defthm test13
   (framep (make-frame 5
@@ -74,6 +82,36 @@
            '((p) (p q) nil nil nil)
            '(p q r)
            '(a b))))
+
+(defthm test14a
+  (world-valid-in-model
+   (make-model
+    (make-frame 5
+                (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+    '((p) (p q) nil nil nil)
+    '(p q r)
+    '(a b))
+   3))
+
+(defthm test14a
+  (world-valid-in-model
+   (make-model
+    (make-frame 5
+                (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+    '((p) (p q) nil nil nil)
+    '(p q r)
+    '(a b))
+   3))
+
+(defthm test14c
+  (rel-extensions-have-appropriate-values
+   (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4))))
+   5))
+
+(defthm test14d
+  (not (rel-extensions-have-appropriate-values
+        (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4))))
+        3)))
 
 (defthm test15
   (not (modelp (make-model
@@ -146,6 +184,85 @@
 
 
 
+;semantics
+
+(defthm stest1
+  (pdl-satisfies
+   (make-model
+    (make-frame 5
+                (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+    '((p) (p q) nil nil nil)
+    '(p q r)
+    '(a b))
+   0
+   'p))
+
+(defthm stest2
+  (pdl-satisfies
+   (make-model
+    (make-frame 5
+                (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+    '((p) (p q) nil nil nil)
+    '(p q r)
+    '(a b))
+   3
+   'true))
+
+(defthm stest3
+  (pdl-satisfies
+   (make-model
+    (make-frame 5
+                (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+    '((p) (p q) nil nil nil)
+    '(p q r)
+    '(a b))
+   0
+   '(v p q)))
 
 
+(defthm stest4
+  (pdl-satisfies
+   (make-model
+    (make-frame 5
+                (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+    '((p) (p q) nil nil nil)
+    '(p q r)
+    '(a b))
+   0
+   '(~ q)))
 
+
+(defthm stest5
+  (pdl-satisfies
+   (make-model
+    (make-frame 5
+                (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+    '((p) (p q) nil nil nil)
+    '(p q r)
+    '(a b))
+   4
+   '(~ q)))
+
+(defthm stest6
+  (not
+   (pdl-satisfies
+    (make-model
+     (make-frame 5
+                 (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+     '((p) (p q) nil nil nil)
+     '(p q r)
+     '(a b))
+    4
+    'q)))
+
+(defthm stest7
+  (not
+   (pdl-satisfies
+    (make-model
+     (make-frame 5
+                 (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+     '((p) (p q) nil nil nil)
+     '(p q r)
+     '(a b))
+    4
+    '(~ (~ p)))))
