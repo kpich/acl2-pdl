@@ -184,7 +184,7 @@
   (nth w (get-valuation m)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; FORMULAS
+; SYNTAX
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; following are somewhat based on Manolios's formulation of formulas for the
@@ -237,6 +237,94 @@
 ; SEMANTICS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; PROGRAMS
+
+; this takes an integer and a list of list of ints. The integer (world-index)
+; corresponds to the world in rels (nth world-index rels) that we're taking the
+; transitive closure of. This may return duplicates (e.g. '(0 0) instead of
+; '(0)).
+(defun transitive-closure (world-index rels)
+  (let ((world-rel (nth world-index rels)))
+    (if (consp world-rel)
+        (let ((new-rels (update-nth world-index
+                                    (cdr world-rel)
+                                    rels)))
+          (cons (car world-rel) 
+                      (append (transitive-closure world-index
+                                                  new-rels)
+                              (transitive-closure (car world-rel)
+                                                  new-rels))))
+      world-rel)))
+
+; so the variable r doesn't really do anything here but make the termination
+; proof straightforward (structural induction vs. induction on a natp). the
+; variable i here is the index of the world (in entire-r) that we're currently
+; examining.
+(defun rel-star-with-index (r i entire-r)
+  (if (consp r)
+      (cons (cons i (transitive-closure i entire-r))
+            (rel-star-with-index (cdr r) (+ 1 i) entire-r))
+    nil))
+
+; takes a list of lists of ints, returns its reflexive transitive closure.
+(defun rel-star (r)
+  (rel-star-with-index r 0 r))
+
+; takes a list of lists of ints, returns the list of unions (so if L1= <A B C>
+; and L2 = <D E F>, this returns <AuD BuE CuF>).
+(defun rel-union (r1 r2)
+  (if (consp r1)
+      (cons (append (car r1) (car r2))
+            (rel-union (cdr r1) (cdr r2)))
+    nil))
+
+(defun composition-of-single-rel (rel r2)
+  (if (consp rel)
+      (cons (nth (car rel) r2)
+            (composition-of-single-rel (cdr rel) r2))
+    nil))
+
+; r's only purpose is to help ACL2 figure out an easy termination proof. In
+; reality, we're just using it as a structure s.t. (len r) + i = (len r1).
+(defun rel-compose-with-index (r i r1 r2)
+  (if (consp r)
+      (cons (composition-of-single-rel (nth i r1) r2)
+            (rel-compose-with-index (cdr r) (+ 1 i) r1 r2))
+    nil))
+
+
+(defun rel-compose (r1 r2)
+  (rel-compose-with-index r1 0 r1 r2))
+
+
+; defines the semantics of a program. Takes a model m and a program p (we
+; assume that (modelp m) and (pdl-programp p)).
+(defun pdl-prog-value (m p)
+  (let ((f (get-frame m)))
+    (cond ((symbolp p)
+           (cdr (assoc p (get-atomic-programs f))))
+          ((equal (len p) 2)
+           (rel-star (pdl-prog-value m (second p))))
+          ((equal (len p) 3)
+           (let ((first (first p))
+                 (second (second p))
+                 (third (third p)))
+             (cond ((equal first 'union)
+                    (rel-union (pdl-prog-value m second)
+                               (pdl-prog-value m third)))
+                   ((equal first 'compose)
+                    (rel-compose (pdl-prog-value m second)
+                                 (pdl-prog-value m third))))))
+          (t nil))))
+
+; takes a model m, world w and program p and returns the p-accessible worlds
+; from w in m.
+(defun prog-accessible-worlds (m w p)
+  (nth w (pdl-prog-value m p)))
+
+  
+; FORMULAS
+
 ;we assume m, w, f are wellformed.
 (defun pdl-satisfies-symbol (m w f)
   (cond ((equal f 'true) t)
@@ -245,31 +333,38 @@
                t
              nil))))
 
-
 ; Pointwise modal valuation. (pdl-satisfies M w phi) iff $M, w \models phi$.
 ; That is, if pdl formula f is satisfied at world w of model m, then this will
 ; return t, otherwise it will return nil.
 ;
 ; For now, we return nil if m, w, or f aren't valid. We may have to reassess
 ; this.
-(defun pdl-satisfies (m w f)
-  (if (and (modelp m)
-           (world-valid-in-model m w)
-           (pdl-formulap f
-                         (get-prop-atoms m)
-                         (get-prog-atoms m)))
-      (cond ((symbolp f)
-             (pdl-satisfies-symbol m w f))
-            ((equal (len f) 2)
-             (not (pdl-satisfies m w (second f))))
-            ((equal (len f) 3)
-             (cond ((equal (first f) 'v)
-                    (or (pdl-satisfies m w (second f))
-                        (pdl-satisfies m w (third f))))
-;TODO diamond semantics.
-                   ((equal (first f) 'diamond) nil)))
-            (t nil))
-    nil))
+(mutual-recursion
+ (defun pdl-satisfies (m w f)
+   (if (and (modelp m)
+            (world-valid-in-model m w)
+            (pdl-formulap f
+                          (get-prop-atoms m)
+                          (get-prog-atoms m)))
+       (cond ((symbolp f)
+              (pdl-satisfies-symbol m w f))
+             ((equal (len f) 2)
+              (not (pdl-satisfies m w (second f))))
+             ((equal (len f) 3)
+              (cond ((equal (first f) 'v)
+                     (or (pdl-satisfies m w (second f))
+                         (pdl-satisfies m w (third f))))
+                    ((equal (first f) 'diamond)
+                     (pdl-satisfies-diamond
+                      m w (prog-accessible-worlds m w (second f)) (third f)))))
+             (t nil))
+     nil))
+ (defun pdl-satisfies-diamond (m w p-accessible-worlds f)
+   (if (consp p-accessible-worlds)
+       (if (pdl-satisfies m (car p-accessible-worlds) f)
+           t
+         (pdl-satisfies-diamond m w (cdr p-accessible-worlds) f))
+     nil)))
 
 
 
