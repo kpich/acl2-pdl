@@ -280,22 +280,15 @@
 
 (defun composition-of-single-rel (rel r2)
   (if (consp rel)
-      (cons (nth (car rel) r2)
+      (append (nth (car rel) r2)
             (composition-of-single-rel (cdr rel) r2))
     nil))
 
-; r's only purpose is to help ACL2 figure out an easy termination proof. In
-; reality, we're just using it as a structure s.t. (len r) + i = (len r1).
-(defun rel-compose-with-index (r i r1 r2)
-  (if (consp r)
-      (cons (composition-of-single-rel (nth i r1) r2)
-            (rel-compose-with-index (cdr r) (+ 1 i) r1 r2))
-    nil))
-
-
 (defun rel-compose (r1 r2)
-  (rel-compose-with-index r1 0 r1 r2))
-
+  (if (consp r1)
+      (cons (composition-of-single-rel (car r1) r2)
+            (rel-compose (cdr r1) r2))
+    nil))
 
 ; defines the semantics of a program. Takes a model m and a program p (we
 ; assume that (modelp m) and (pdl-programp p)).
