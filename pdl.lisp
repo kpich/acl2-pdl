@@ -290,6 +290,8 @@
             (rel-compose (cdr r1) r2))
     nil))
 
+
+
 ; defines the semantics of a program. Takes a model m and a program p (we
 ; assume that (modelp m) and (pdl-programp p)).
 (defun pdl-prog-value (m p)
@@ -313,7 +315,7 @@
 ; takes a model m, world w and program p and returns the p-accessible worlds
 ; from w in m.
 (defun prog-accessible-worlds (m w p)
-  (nth w (pdl-prog-value m p)))
+  (remove-duplicates (nth w (pdl-prog-value m p))))
 
   
 ; FORMULAS
@@ -326,14 +328,53 @@
                t
              nil))))
 
+
+
+
+; IGNORE EVERYTHING BELOW.
+
+
+
 ; Pointwise modal valuation. (pdl-satisfies M w phi) iff $M, w \models phi$.
 ; That is, if pdl formula f is satisfied at world w of model m, then this will
 ; return t, otherwise it will return nil.
 ;
 ; For now, we return nil if m, w, or f aren't valid. We may have to reassess
 ; this.
+
 (mutual-recursion
  (defun pdl-satisfies (m w f)
+;   (declare (xargs :measure (acl2-count f)))
+   (cond ((symbolp f)
+          (pdl-satisfies-symbol m w f))
+         ((equal (len f) 2)
+          (not (pdl-satisfies m w (second f))))
+         ((equal (len f) 3)
+          (cond ((equal (first f) 'v)
+                 (or (pdl-satisfies m w (second f))
+                     (pdl-satisfies m w (third f))))
+                ((equal (first f) 'diamond)
+                 (pdl-satisfies-diamond
+                  m
+                  (prog-accessible-worlds m w (second f))
+                  (third f)))))
+         (t nil)))
+ (defun pdl-satisfies-diamond (m p-accessible-worlds f)
+   (if (consp p-accessible-worlds)
+       (if (pdl-satisfies m (car p-accessible-worlds) f)
+           t
+         (pdl-satisfies-diamond m (cdr p-accessible-worlds) f))
+     nil)))
+
+
+
+(include-book "ordinals/lexicographic-ordering" :dir :system)
+(encapsulate
+ ()
+ (set-well-founded-relation l<) ; will be treated as LOCAL
+(mutual-recursion
+ (defun pdl-satisfies (m w f)
+   (declare (xargs :measure (list 0 (acl2-count f))))
    (if (and (modelp m)
             (world-valid-in-model m w)
             (pdl-formulap f
@@ -349,15 +390,19 @@
                          (pdl-satisfies m w (third f))))
                     ((equal (first f) 'diamond)
                      (pdl-satisfies-diamond
-                      m w (prog-accessible-worlds m w (second f)) (third f)))))
+                      m
+                      (prog-accessible-worlds m w (second f))
+                      (third f)))))
              (t nil))
      nil))
- (defun pdl-satisfies-diamond (m w p-accessible-worlds f)
+ (defun pdl-satisfies-diamond (m p-accessible-worlds f)
+   (declare (xargs :measure (list 1 (acl2-count p-accessible-worlds))))
    (if (consp p-accessible-worlds)
        (if (pdl-satisfies m (car p-accessible-worlds) f)
            t
-         (pdl-satisfies-diamond m w (cdr p-accessible-worlds) f))
+         (pdl-satisfies-diamond m (cdr p-accessible-worlds) f))
      nil)))
+)
 
 
 

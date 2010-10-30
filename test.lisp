@@ -255,14 +255,165 @@
     4
     'q)))
 
-(defthm stest7
+; not theorems -- these are just there to examine the output.
+
+; should be nil
+(pdl-prog-value
+ (make-model
+  (make-frame 5
+              (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))
+                    (make-rel 'b '((4) nil nil (0) (0)))))
+  '((p) (p q) nil nil nil)
+  '(p q r)
+  '(a b))
+ 'a)
+
+(pdl-prog-value
+ (make-model
+  (make-frame 5
+              (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))
+                    (make-rel 'b '((4) nil nil (0) (0)))))
+  '((p) (p q) nil nil nil)
+  '(p q r)
+  '(a b))
+ '(star a))
+
+
+(pdl-prog-value
+ (make-model
+  (make-frame 5
+              (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))
+                    (make-rel 'b '((4) nil nil (0) (0)))))
+  '((p) (p q) nil nil nil)
+  '(p q r)
+  '(a b))
+ '(union a b))
+
+(pdl-prog-value
+ (make-model
+  (make-frame 5
+              (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))
+                    (make-rel 'b '((4) nil nil (0) (0)))))
+  '((p) (p q) nil nil nil)
+  '(p q r)
+  '(a b))
+ '(compose a b))
+
+(defthm stest10
+  (pdl-satisfies-symbol
+   (make-model
+    (make-frame 5
+                (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))
+                      (make-rel 'b '((4) nil nil (0) (0)))))
+    '((p) (p q) nil nil nil)
+    '(p q r)
+    '(a b))
+   0
+   'p))
+
+
+
+(defthm stest11
   (not
    (pdl-satisfies
     (make-model
      (make-frame 5
-                 (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))))
+                 (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))
+                       (make-rel 'b '((4) nil nil (0) (0)))))
      '((p) (p q) nil nil nil)
      '(p q r)
      '(a b))
-    4
-    '(~ (~ p)))))
+    1
+    '(^ p q))))
+  
+
+;t
+(pdl-satisfies
+ (make-model
+  (make-frame 5
+              (list (make-rel 'a '(nil (0) (0 1) nil (0 1 2 3 4)))
+                    (make-rel 'b '((4) nil nil (0) (0)))))
+  '((p) (p q) nil nil nil)
+  '(p q r)
+  '(a b))
+ 2
+ '(diamond a q))
+
+
+
+
+
+(pdl-satisfies
+ (make-model
+  (make-frame 5
+              (list (make-rel 'a '(nil (2) (1) nil (0 1 2 3 4)))
+                    (make-rel 'b '((4) nil nil (0) (0)))))
+  '((p) (p q) nil nil nil)
+  '(p q r)
+  '(a b))
+ 2
+ '(diamond a (diamond a p)))
+
+
+(mutual-recursion
+ (defun foo (a b)
+   (if (consp a)
+       (bar '(0 1 2 3) b)
+     nil))
+ (defun bar (x y)
+   (if (consp x)
+       (bar (cdr x) y)
+       (if (pdl-satisfies m (car p-accessible-worlds) f)
+           t
+         (pdl-satisfies-diamond m (cdr p-accessible-worlds) f))
+     nil)))
+
+
+
+; termination analysis doesn't terminate.
+(mutual-recursion
+ (defun foo (x)
+   (declare (xargs :measure (acl2-count x)))
+   (cond ((endp x) nil)
+         ((equal (len x) 1) (foo (cdr x)))
+         (t (bar '(0 1 2) (car x)))))
+ (defun bar (a b)
+   (declare (xargs :measure (acl2-count a)))
+   (if (consp a)
+       (if (foo b) t (bar (cdr a) b))
+     nil)))
+
+
+(include-book "ordinals/lexicographic-ordering" :dir :system)
+(encapsulate
+ ()
+ (set-well-founded-relation l<) ; will be treated as LOCAL
+ (mutual-recursion
+  (defun foo (x)
+    (declare (xargs :measure (list (acl2-count x) 1)))
+    (cond ((endp x) nil)
+          ((equal (len x) 1) (foo (cdr x)))
+          (t (bar '(0 1 2) (car x)))))
+  (defun bar (a b)
+    (declare (xargs :measure (list (acl2-count a) 0)))
+    (if (consp a)
+        (if (foo b) t (bar (cdr a) b))
+      nil))))
+ 
+
+
+(include-book "ordinals/lexicographic-ordering" :dir :system)
+(encapsulate
+ ()
+ (set-well-founded-relation l<) ; will be treated as LOCAL
+ (mutual-recursion
+  (defun foo (m x)
+    (declare (xargs :measure (list (len x) (len m))))
+    (cond ((endp x) nil)
+          ((equal (len x) 1) (foo m (cdr x)))
+          (t (bar m (cdr m) x))))
+  (defun bar (m a c)
+    (declare (xargs :measure (list (len c) (len a))))
+    (if (consp a)
+        (if (foo m (car c)) t (bar m (cdr a) c))
+      nil))))
