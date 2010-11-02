@@ -232,6 +232,37 @@
         (t nil)))
 
 
+; so our syntax is richer than our semantics, which is defined only for
+; negation and disjunction. this takes a formula that could have conjunction or
+; implication and removes them. Also, if the formula has box, it translates it
+; into a statement with its dual, diamond.
+(defun simplify-formula (f)
+  (cond ((atom f) f)
+        ((equal (len f) 2)
+         (list (car f) (simplify-formula (cdr f))))
+        (t
+         (let ((first (first f))
+               (second (second f))
+               (third (third f)))
+           (cond ((equal first 'v)
+                  (list 'v (simplify-formula second)
+                        (simplify-formula third)))
+                 ((equal first 'diamond)
+                  (list 'diamond second (simplify-formula third)))
+                 ((equal first '^)
+                  (list '~ (list 'v
+                                 (list '~ (simplify-formula second))
+                                 (list '~ (simplify-formula third)))))
+                 ((equal first '->)
+                  (list 'v
+                        (list '~ (simplify-formula second))
+                        (simplify-formula third)))
+                 (t
+                  (list '~ (list 'diamond
+                                 second
+                                 (list '~ (simplify-formula third))))))))))
+             
+    
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; SEMANTICS
@@ -340,35 +371,35 @@
 (encapsulate
  ()
  (set-well-founded-relation l<) 
-(mutual-recursion
- (defun pdl-satisfies-aux (m w f worlds)
-   (declare (xargs :measure (list (acl2-count f) (acl2-count worlds))))
-   (cond ((symbolp f)
-          (pdl-satisfies-symbol m w f))
-         ((equal (len f) 2)
-          (not (pdl-satisfies-aux m w (second f) worlds)))
-         ((equal (len f) 3)
-          (cond ((equal (first f) 'v)
-                 (or (pdl-satisfies-aux m w (second f) worlds)
-                     (pdl-satisfies-aux m w (third f) worlds)))
-                ((equal (first f) 'diamond)
-                 (pdl-satisfies-diamond
-                  m
-                  (prog-accessible-worlds m w (second f))
-                  (third f)))))
-         (t nil)))
- (defun pdl-satisfies-diamond (m p-accessible-worlds f)
-   (declare (xargs :measure (list (acl2-count f)
-                                  (acl2-count p-accessible-worlds))))
-   (if (consp p-accessible-worlds)
-       (if (pdl-satisfies-aux m (car p-accessible-worlds) f nil)
-           t
-         (pdl-satisfies-diamond m (cdr p-accessible-worlds) f))
-     nil))))
+ (mutual-recursion
+  (defun pdl-satisfies-aux (m w f worlds)
+    (declare (xargs :measure (list (acl2-count f) (acl2-count worlds))))
+    (cond ((symbolp f)
+           (pdl-satisfies-symbol m w f))
+          ((equal (len f) 2)
+           (not (pdl-satisfies-aux m w (second f) worlds)))
+          ((equal (len f) 3)
+           (cond ((equal (first f) 'v)
+                  (or (pdl-satisfies-aux m w (second f) worlds)
+                      (pdl-satisfies-aux m w (third f) worlds)))
+                 ((equal (first f) 'diamond)
+                  (pdl-satisfies-diamond
+                   m
+                   (prog-accessible-worlds m w (second f))
+                   (third f)))))
+          (t nil)))
+  (defun pdl-satisfies-diamond (m p-accessible-worlds f)
+    (declare (xargs :measure (list (acl2-count f)
+                                   (acl2-count p-accessible-worlds))))
+    (if (consp p-accessible-worlds)
+        (if (pdl-satisfies-aux m (car p-accessible-worlds) f nil)
+            t
+          (pdl-satisfies-diamond m (cdr p-accessible-worlds) f))
+      nil))))
 
 
 (defun pdl-satisfies (m w f)
-  (pdl-satisfies-aux m w f nil))
+  (pdl-satisfies-aux m w (simplify-formula f) nil))
 
 
 
