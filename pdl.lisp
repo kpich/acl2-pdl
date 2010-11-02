@@ -405,10 +405,6 @@
 
 
 
-;TODO function to translation from (box, diamond, ->, v, ^, ~) to (diamond,
-;v,~).
-
-
-;TODO could prove some basic statements about semantics, e.g.
-; (iff (pdl-satisfies m w '(~ f)) (not (pdl-satisfies m w f))). These will be
-; interesting if we do indeed end up only defining semantics for (~,v,<>).
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; PROOFS OF CORRECTNESS OF SEMANTICS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
