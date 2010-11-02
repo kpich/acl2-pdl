@@ -329,30 +329,28 @@
              nil))))
 
 
-
-
-; IGNORE EVERYTHING BELOW.
-
-
-
 ; Pointwise modal valuation. (pdl-satisfies M w phi) iff $M, w \models phi$.
 ; That is, if pdl formula f is satisfied at world w of model m, then this will
 ; return t, otherwise it will return nil.
 ;
-; For now, we return nil if m, w, or f aren't valid. We may have to reassess
-; this.
+; The actual function to use is pdl-satisfies.
 
+
+(include-book "ordinals/lexicographic-ordering" :dir :system)
+(encapsulate
+ ()
+ (set-well-founded-relation l<) 
 (mutual-recursion
- (defun pdl-satisfies (m w f)
-;   (declare (xargs :measure (acl2-count f)))
+ (defun pdl-satisfies-aux (m w f worlds)
+   (declare (xargs :measure (list (acl2-count f) (acl2-count worlds))))
    (cond ((symbolp f)
           (pdl-satisfies-symbol m w f))
          ((equal (len f) 2)
-          (not (pdl-satisfies m w (second f))))
+          (not (pdl-satisfies-aux m w (second f) worlds)))
          ((equal (len f) 3)
           (cond ((equal (first f) 'v)
-                 (or (pdl-satisfies m w (second f))
-                     (pdl-satisfies m w (third f))))
+                 (or (pdl-satisfies-aux m w (second f) worlds)
+                     (pdl-satisfies-aux m w (third f) worlds)))
                 ((equal (first f) 'diamond)
                  (pdl-satisfies-diamond
                   m
@@ -360,49 +358,17 @@
                   (third f)))))
          (t nil)))
  (defun pdl-satisfies-diamond (m p-accessible-worlds f)
+   (declare (xargs :measure (list (acl2-count f)
+                                  (acl2-count p-accessible-worlds))))
    (if (consp p-accessible-worlds)
-       (if (pdl-satisfies m (car p-accessible-worlds) f)
+       (if (pdl-satisfies-aux m (car p-accessible-worlds) f nil)
            t
          (pdl-satisfies-diamond m (cdr p-accessible-worlds) f))
-     nil)))
+     nil))))
 
 
-
-(include-book "ordinals/lexicographic-ordering" :dir :system)
-(encapsulate
- ()
- (set-well-founded-relation l<) ; will be treated as LOCAL
-(mutual-recursion
- (defun pdl-satisfies (m w f)
-   (declare (xargs :measure (list 0 (acl2-count f))))
-   (if (and (modelp m)
-            (world-valid-in-model m w)
-            (pdl-formulap f
-                          (get-prop-atoms m)
-                          (get-prog-atoms m)))
-       (cond ((symbolp f)
-              (pdl-satisfies-symbol m w f))
-             ((equal (len f) 2)
-              (not (pdl-satisfies m w (second f))))
-             ((equal (len f) 3)
-              (cond ((equal (first f) 'v)
-                     (or (pdl-satisfies m w (second f))
-                         (pdl-satisfies m w (third f))))
-                    ((equal (first f) 'diamond)
-                     (pdl-satisfies-diamond
-                      m
-                      (prog-accessible-worlds m w (second f))
-                      (third f)))))
-             (t nil))
-     nil))
- (defun pdl-satisfies-diamond (m p-accessible-worlds f)
-   (declare (xargs :measure (list 1 (acl2-count p-accessible-worlds))))
-   (if (consp p-accessible-worlds)
-       (if (pdl-satisfies m (car p-accessible-worlds) f)
-           t
-         (pdl-satisfies-diamond m (cdr p-accessible-worlds) f))
-     nil)))
-)
+(defun pdl-satisfies (m w f)
+  (pdl-satisfies-aux m w f nil))
 
 
 
