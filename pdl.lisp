@@ -414,9 +414,6 @@
 ; to
 ; (defun foobar (A B C) (if C foo-body bar-body))
 
-;(encapsulate
-; ()
-; (set-well-founded-relation l<) 
 (defun pdl-satisfies-aux (m w f worlds evaling-formula)
   (declare (xargs :well-founded-relation l<
                   :measure (list (acl2-count f) (acl2-count worlds))))
@@ -442,7 +439,6 @@
             t
           (pdl-satisfies-aux m w f (cdr worlds) nil))
       nil)))
-;)
 
 
 
@@ -455,12 +451,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-
-(defthm neg-sem-correct
+(defthm negation-semantics-correct
   (implies (and (modelp m)
-                (pdl-formulap m (get-prop-atoms m) (get-prog-atoms m)))
-           (implies (equal (len f) 2)
-                    (not (pdl-satisfies-aux m w f nil t)))))
+                (pdl-formulap m (get-prop-atoms m) (get-prog-atoms m))
+                (equal (first f) '~))
+           (not (pdl-satisfies m w f))))
 
 
 
@@ -469,39 +464,26 @@
 
 
 
-(defun negation-semantics-correct-induction (m w f ws flg)
-  (declare (ignorable m w)
-           (xargs :well-founded-relation l<
-                  :measure (list (acl2-count f) (acl2-count ws))))
-  (if flg
-      (if (atom f)
-          f
-        (if (equal (len f) 2)
-            (not (negation-semantics-correct-induction m w (second f) ws flg))
-          (if (equal (first f) 'diamond)
-              (negation-semantics-correct-induction m w (third f) ws flg)
-            (or (negation-semantics-correct-induction m w (second f) ws flg)
-                (negation-semantics-correct-induction m w (third f) ws flg)))))
-    (if (consp ws)
-        (if (negation-semantics-correct-induction m (car ws) f nil t)
-            t
-          (negation-semantics-correct-induction m w f (car ws) nil))
-      nil)))
+;(defun negation-semantics-correct-induction (m w f ws flg)
+;  (declare (ignorable m w)
+;           (xargs :well-founded-relation l<
+;                  :measure (list (acl2-count f) (acl2-count ws))))
+;  (if flg
+;      (if (atom f)
+;          f
+;        (if (equal (len f) 2)
+;            (not (negation-semantics-correct-induction m w (second f) ws flg))
+;          (if (equal (first f) 'diamond)
+;              (negation-semantics-correct-induction m w (third f) ws flg)
+;            (or (negation-semantics-correct-induction m w (second f) ws flg)
+;                (negation-semantics-correct-induction m w (third f) ws flg)))))
+;    (if (consp ws)
+;        (if (negation-semantics-correct-induction m (car ws) f nil t)
+;            t
+;          (negation-semantics-correct-induction m w f (car ws) nil))
+;      nil)))
 
 
-
-
-(defun neg-sem-correct-ind (m w f ws flg)
-  (declare (ignorable m w ws flg))
-  (if (equal (len f) 2)
-      (not (neg-sem-correct-ind m w (second f) ws flg))
-    nil))
-
-
-(defthm negation-semantics-correct
-  (implies (pdl-satisfies-aux M W '(~ F) nil t)
-           (not (pdl-satisfies-aux M W F nil t)))
-  :hints (("Goal" :induct (neg-sem-correct-ind m w f nil t))))
 
 
 
@@ -515,21 +497,3 @@
 
 
 
-
-
-
-
-
-(defthm negation-semantics-correct
-  (implies (and (modelp M)
-                (pdl-formulap F (get-prop-atoms M) (get-prog-atoms M)))
-           (implies (pdl-satisfies M W '(~ F))
-                    (not (pdl-satisfies M W F)))))
-
-
-;(defthm negation-semantics-correct
-;  (implies (and (modelp M)
-;                (world-valid-in-model M W)
-;                (pdl-formulap F (get-prop-atoms M) (get-prog-atoms M)))
-;           (implies (pdl-satisfies M W '(~ F))
-;                    (not (pdl-satisfies M W F)))))
