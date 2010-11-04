@@ -451,6 +451,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+; Propositional semantics - negation and disjunction:
+
 
 (defthm two-elem-formulas-must-be-negations
   (implies (pdl-formulap f a1 a2)
@@ -471,6 +473,36 @@
            (equal (pdl-satisfies m w f)
                   (or (pdl-satisfies m w (second f))
                       (pdl-satisfies m w (third f))))))
+
+
+; Now we verify the semantics of programs. First, we look at programs in
+; "isolation" -- that is, separate from the concept of satisfiability of
+; formulae:
+
+
+(defthm atomic-prog-value-is-correct
+  (implies (symbolp p)
+           (equal (pdl-prog-value m p) (cdr (assoc p (get-atomic-programs
+                                                      (get-frame m)))))))
+
+
+
+; here
+
+
+; we could perhaps declare this an equivalence relation....
+(defun seteq (A B)
+  (and (subsetp A B) (subsetp B A)))
+
+; define reachability. then b \in p*[i] iff b is reachable from p.
+
+
+(defthm star-prog-value-is-correct
+  (implies (equal (len p) 2)
+           
+
+
+; Correctness of semantics of complex programs:
 
 ;here
 
