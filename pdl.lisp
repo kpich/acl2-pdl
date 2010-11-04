@@ -452,13 +452,18 @@
 
 
 
-(defthm negation-semantics-weakly-correct
-  (implies (equal (len f) 2)
-           (equal (pdl-satisfies m w (second f))
-                  (not (pdl-satisfies m w f)))))
-
 ;here
 
+(defthm two-elem-formulas-must-be-negations
+  (implies (pdl-formulap f a1 a2)
+           (iff (equal (len f) 2)
+                (equal (first f) '~))))
+
+(defthm negation-semantics-correct
+  (implies (and (pdl-formulap f (get-prop-atoms m) (get-prog-atoms m))
+                (equal (first f) '~))
+           (equal (pdl-satisfies m w (second f))
+                  (not (pdl-satisfies m w f)))))
 
 
 (defthm disjunction-semantics-correct
