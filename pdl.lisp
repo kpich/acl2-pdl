@@ -29,6 +29,9 @@
 
 (in-package "ACL2")
 
+(include-book "ordinals/lexicographic-ordering" :dir :system)
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; FRAMES, MODELS
@@ -364,47 +367,169 @@
 ; That is, if pdl formula f is satisfied at world w of model m, then this will
 ; return t, otherwise it will return nil.
 ;
-; The actual function to use is pdl-satisfies.
+; So the natural semantics here would use mutual recursion (and are given
+; below). However, since mutual recursion is like basically impossible to
+; reason about, we _actually_ define a basically equivalent function and use
+; that for reasoning. So here's the first, mutually-recursive definition that
+; we won't actually use:
 
 
-(include-book "ordinals/lexicographic-ordering" :dir :system)
 (encapsulate
  ()
  (set-well-founded-relation l<) 
  (mutual-recursion
-  (defun pdl-satisfies-aux (m w f worlds)
+  (defun pdl-satisfies-mutual (m w f worlds)
     (declare (xargs :measure (list (acl2-count f) (acl2-count worlds))))
     (cond ((symbolp f)
            (pdl-satisfies-symbol m w f))
           ((equal (len f) 2)
-           (not (pdl-satisfies-aux m w (second f) worlds)))
+           (not (pdl-satisfies-mutual m w (second f) worlds)))
           ((equal (len f) 3)
            (cond ((equal (first f) 'v)
-                  (or (pdl-satisfies-aux m w (second f) worlds)
-                      (pdl-satisfies-aux m w (third f) worlds)))
+                  (or (pdl-satisfies-mutual m w (second f) worlds)
+                      (pdl-satisfies-mutual m w (third f) worlds)))
                  ((equal (first f) 'diamond)
-                  (pdl-satisfies-diamond
+                  (pdl-satisfies-diamond-mutual
                    m
                    (prog-accessible-worlds m w (second f))
                    (third f)))))
           (t nil)))
-  (defun pdl-satisfies-diamond (m p-accessible-worlds f)
+  (defun pdl-satisfies-diamond-mutual (m p-accessible-worlds f)
     (declare (xargs :measure (list (acl2-count f)
                                    (acl2-count p-accessible-worlds))))
     (if (consp p-accessible-worlds)
-        (if (pdl-satisfies-aux m (car p-accessible-worlds) f nil)
+        (if (pdl-satisfies-mutual m (car p-accessible-worlds) f nil)
             t
-          (pdl-satisfies-diamond m (cdr p-accessible-worlds) f))
+          (pdl-satisfies-diamond-mutual m (cdr p-accessible-worlds) f))
       nil))))
 
 
+; ...and here is the non-mutually-recursive equivalent that we WILL end up
+; using (basically we just have another argument, evaling-formula, that is t if
+; we're in pdl-satisfies-mutual above and nil if we're in pdl-satisfies-diamond
+; above. That is, we changed
+;
+; (mutual-recursion (defun foo (A) foo-body) (defun bar (B) bar-body))
+;
+; to
+; (defun foobar (A B C) (if C foo-body bar-body))
+
+;(encapsulate
+; ()
+; (set-well-founded-relation l<) 
+(defun pdl-satisfies-aux (m w f worlds evaling-formula)
+  (declare (xargs :well-founded-relation l<
+                  :measure (list (acl2-count f) (acl2-count worlds))))
+  (if evaling-formula
+      (cond ((symbolp f)
+             (pdl-satisfies-symbol m w f))
+            ((equal (len f) 2)
+             (not (pdl-satisfies-aux m w (second f) worlds t)))
+            ((equal (len f) 3)
+             (cond ((equal (first f) 'v)
+                    (or (pdl-satisfies-aux m w (second f) worlds t)
+                        (pdl-satisfies-aux m w (third f) worlds t)))
+                   ((equal (first f) 'diamond)
+                    (pdl-satisfies-aux
+                     m
+                     w
+                     (third f)
+                     (prog-accessible-worlds m w (second f))
+                     nil))))
+            (t nil))
+    (if (consp worlds)
+        (if (pdl-satisfies-aux m (car worlds) f nil t)
+            t
+          (pdl-satisfies-aux m w f (cdr worlds) nil))
+      nil)))
+;)
+
+
+
 (defun pdl-satisfies (m w f)
-  (pdl-satisfies-aux m w (simplify-formula f) nil))
-
-
-
+  (pdl-satisfies-aux m w f nil t))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; PROOFS OF CORRECTNESS OF SEMANTICS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+(defthm neg-sem-correct
+  (implies (and (modelp m)
+                (pdl-formulap m (get-prop-atoms m) (get-prog-atoms m)))
+           (implies (equal (len f) 2)
+                    (not (pdl-satisfies-aux m w f nil t)))))
+
+
+
+;here
+
+
+
+
+(defun negation-semantics-correct-induction (m w f ws flg)
+  (declare (ignorable m w)
+           (xargs :well-founded-relation l<
+                  :measure (list (acl2-count f) (acl2-count ws))))
+  (if flg
+      (if (atom f)
+          f
+        (if (equal (len f) 2)
+            (not (negation-semantics-correct-induction m w (second f) ws flg))
+          (if (equal (first f) 'diamond)
+              (negation-semantics-correct-induction m w (third f) ws flg)
+            (or (negation-semantics-correct-induction m w (second f) ws flg)
+                (negation-semantics-correct-induction m w (third f) ws flg)))))
+    (if (consp ws)
+        (if (negation-semantics-correct-induction m (car ws) f nil t)
+            t
+          (negation-semantics-correct-induction m w f (car ws) nil))
+      nil)))
+
+
+
+
+(defun neg-sem-correct-ind (m w f ws flg)
+  (declare (ignorable m w ws flg))
+  (if (equal (len f) 2)
+      (not (neg-sem-correct-ind m w (second f) ws flg))
+    nil))
+
+
+(defthm negation-semantics-correct
+  (implies (pdl-satisfies-aux M W '(~ F) nil t)
+           (not (pdl-satisfies-aux M W F nil t)))
+  :hints (("Goal" :induct (neg-sem-correct-ind m w f nil t))))
+
+
+
+; here is the proof that they're the same:
+
+(defthm pdl-satisfies-aux-same-as-pdl-satisfies-mutual
+  (equal 
+         (pdl-satisfies-aux m w f ws t)
+         (pdl-satisfies-mutual m w f ws)))
+
+
+
+
+
+
+
+
+
+(defthm negation-semantics-correct
+  (implies (and (modelp M)
+                (pdl-formulap F (get-prop-atoms M) (get-prog-atoms M)))
+           (implies (pdl-satisfies M W '(~ F))
+                    (not (pdl-satisfies M W F)))))
+
+
+;(defthm negation-semantics-correct
+;  (implies (and (modelp M)
+;                (world-valid-in-model M W)
+;                (pdl-formulap F (get-prop-atoms M) (get-prog-atoms M)))
+;           (implies (pdl-satisfies M W '(~ F))
+;                    (not (pdl-satisfies M W F)))))
