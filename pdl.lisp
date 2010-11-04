@@ -452,8 +452,6 @@
 
 
 
-;here
-
 (defthm two-elem-formulas-must-be-negations
   (implies (pdl-formulap f a1 a2)
            (iff (equal (len f) 2)
@@ -466,46 +464,13 @@
                   (not (pdl-satisfies m w f)))))
 
 
+
 (defthm disjunction-semantics-correct
-  (implies (and (modelp m)
-                (pdl-formulap f (get-prop-atoms m) (get-prog-atoms m))
-                (equal (len f) 3)
+  (implies (and (equal (len f) 3)
                 (equal (first f) 'v))
-           (or (pdl-satisfies m w (second f))
-               (pdl-satisfies m w (third f)))))
+           (equal (pdl-satisfies m w f)
+                  (or (pdl-satisfies m w (second f))
+                      (pdl-satisfies m w (third f))))))
 
-
-
-;(defun negation-semantics-correct-induction (m w f ws flg)
-;  (declare (ignorable m w)
-;           (xargs :well-founded-relation l<
-;                  :measure (list (acl2-count f) (acl2-count ws))))
-;  (if flg
-;      (if (atom f)
-;          f
-;        (if (equal (len f) 2)
-;            (not (negation-semantics-correct-induction m w (second f) ws flg))
-;          (if (equal (first f) 'diamond)
-;              (negation-semantics-correct-induction m w (third f) ws flg)
-;            (or (negation-semantics-correct-induction m w (second f) ws flg)
-;                (negation-semantics-correct-induction m w (third f) ws flg)))))
-;    (if (consp ws)
-;        (if (negation-semantics-correct-induction m (car ws) f nil t)
-;            t
-;          (negation-semantics-correct-induction m w f (car ws) nil))
-;      nil)))
-
-
-
-
-
-; here is the proof that they're the same:
-
-(defthm pdl-satisfies-aux-same-as-pdl-satisfies-mutual
-  (equal 
-         (pdl-satisfies-aux m w f ws t)
-         (pdl-satisfies-mutual m w f ws)))
-
-
-
+;here
 
