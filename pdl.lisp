@@ -418,7 +418,7 @@
   (declare (xargs :well-founded-relation l<
                   :measure (list (acl2-count f) (acl2-count worlds))))
   (if evaling-formula
-      (cond ((symbolp f)
+      (cond ((atom f)
              (pdl-satisfies-symbol m w f))
             ((equal (len f) 2)
              (not (pdl-satisfies-aux m w (second f) worlds t)))
@@ -451,16 +451,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(defthm negation-semantics-correct
-  (implies (and (modelp m)
-                (pdl-formulap m (get-prop-atoms m) (get-prog-atoms m))
-                (equal (first f) '~))
-           (not (pdl-satisfies m w f))))
 
-
+(defthm negation-semantics-weakly-correct
+  (implies (equal (len f) 2)
+           (equal (pdl-satisfies m w (second f))
+                  (not (pdl-satisfies m w f)))))
 
 ;here
 
+
+
+(defthm disjunction-semantics-correct
+  (implies (and (modelp m)
+                (pdl-formulap f (get-prop-atoms m) (get-prog-atoms m))
+                (equal (len f) 3)
+                (equal (first f) 'v))
+           (or (pdl-satisfies m w (second f))
+               (pdl-satisfies m w (third f)))))
 
 
 
