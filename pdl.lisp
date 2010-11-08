@@ -477,8 +477,77 @@
 
 
 
+; Diamond semantics.
+;
+; Now,
+;    M,w \models <\pi> \phi
+;    iff
+;    \exists w' [ wR_{\pi}w' \wedge M,w' \models \phi.
+;
+; We therefore prove the two statements of the biconditional separately:
+;
+; diamond-sem-lemma1:
+;    \exists w2 [wR{\pi}w2 \wedge M,w2 \models \phi ]
+;    \rightarrow
+;    M,w \models <\pi> \phi
+;
+; diamond-sem-lemma2 (lemma1's converse's contrapositive):
+;    \forall w2 \neg [wR_{\pi}w2 \wedge M,w2 \models phi]
+;    \rightarrow
+;    M,w \not\models <\pi> \phi.
+
+
+(defthm diamond-sem-lemma1-kinda
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'diamond)
+                (pdl-satisfies-aux m 
+                                   w 
+                                   (third f) 
+                                   (prog-accessible-worlds m w (second f))
+                                   nil))
+           (pdl-satisfies m w f)))
+
+
+
+; here
+
+
+
+(defun-sk diamond-sem-lemma1-sk (m w p f)
+  (exists w2 (and (member w2 (prog-accessible-worlds m w p))
+                  (pdl-satisfies m w f))))
+
+
+;(in-theory (disable diamond-sem-lemma1-sk diamond-sem-lemma1-sk-suff))
+
+
+
+;  (implies (diamond-sem-lemma1-sk m w p f)
+;           (pdl-satisfies m w (list 'diamond p f)))
+;)
+ ; :hints (("Goal" 
+  ;         :use ((:instance (:definition diamond-sem-lemma1-sk))
+   ;              (:instance (pdl-satisfies-aux
+    ;                         (m m)
+     ;                        (w w)
+      ;                       (f (list 'diamond p f))
+       ;                      (worlds (cons (diamond-sem-lemma1-sk-witness
+        ;                                    (prog-accessible-worlds m w p))))
+         ;                    (evaling-formula nil)))))))
+
+
+
+;here
+
+
+
+
 ; Now we verify the semantics of programs.
 
+
+
+
+;following is ok
 
 (defthm atomic-prog-value-is-correct
   (implies (symbolp p)
@@ -486,9 +555,8 @@
                                                       (get-frame m)))))))
 
 
+;following is garbage
 
-
-;here
 
 
 
@@ -524,11 +592,11 @@
 
 ; we want to prove two things.
 ;
-; First, diamond-sem-lemma1:
+; First, compose-sem-lemma1:
 ;     \exists w' [ M,w' \models \phi \and w R_{\pi} w' ] \implies
 ;     M,W \models <\pi> \phi.
 ;
-; Second, the contrapositive of its converse, which we call diamond-sem-lemma2:
+; Second, the contrapositive of its converse, which we call compose-sem-lemma2:
 ;     \forall w' \neg [ M,w' \models \phi \and wR_{\pi}w' ] \implies
 ;     M,w \not\models <\pi> \phi.
 
