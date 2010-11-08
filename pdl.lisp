@@ -31,6 +31,7 @@
 
 (include-book "ordinals/lexicographic-ordering" :dir :system)
 
+(set-gag-mode :goals)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -475,9 +476,8 @@
                       (pdl-satisfies m w (third f))))))
 
 
-; Now we verify the semantics of programs. First, we look at programs in
-; "isolation" -- that is, separate from the concept of satisfiability of
-; formulae:
+
+; Now we verify the semantics of programs.
 
 
 (defthm atomic-prog-value-is-correct
@@ -487,22 +487,83 @@
 
 
 
-; here
+
+;here
 
 
-; we could perhaps declare this an equivalence relation....
-(defun seteq (A B)
-  (and (subsetp A B) (subsetp B A)))
 
-; define reachability. then b \in p*[i] iff b is reachable from p.
+(defthm composition-correct1
+  (let* ((first (first f))
+        (second (second f))
+        (third (third f))
+        (sec-first (first second))
+        (sec-second (second second))
+        (sec-third (third second)))
+    (implies (and (equal (len f) 3)
+                  (equal first 'diamond)
+                  (equal sec-first 'compose))
+             (implies (pdl-satisfies m w f)
+                      (pdl-satisfies m w (list 'diamond sec-second
+                                             (list 'diamond sec-third
+                                                   third)))))))
+
 
 
 (defthm star-prog-value-is-correct
-  (implies (equal (len p) 2)
+  (implies (and (equal (len p) 2)
+                (< i (get-num-nodes (get-frame m))))
+           (equal (nth i (pdl-prog-value m p))
+                  (cons i (transitive-closure i (pdl-prog-value m (second p)))))))
            
+
 
 
 ; Correctness of semantics of complex programs:
 
-;here
+
+
+; we want to prove two things.
+;
+; First, diamond-sem-lemma1:
+;     \exists w' [ M,w' \models \phi \and w R_{\pi} w' ] \implies
+;     M,W \models <\pi> \phi.
+;
+; Second, the contrapositive of its converse, which we call diamond-sem-lemma2:
+;     \forall w' \neg [ M,w' \models \phi \and wR_{\pi}w' ] \implies
+;     M,w \not\models <\pi> \phi.
+
+
+
+
+
+;;; BELOW IS GARBAGE
+
+
+
+(defun-sk diamond-sk (m w1 f)
+  (exists w (and (member w (prog-accessible-worlds m w1 (second f)))
+                 (pdl-satisfies m w (third f)))))
+
+(in-theory (disable diamond-sk diamond-sk-suff))
+
+; here
+
+; should be iff or equal...
+(defthm diamond-semantics-weakly-correct
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'diamond))
+           (implies (pdl-satisfies m w f)
+                    (diamond-sk m w f)))
+  :hints (("Goal" :use ((:instance diamond-sk-suff (m m) (w1 w) (f f))))))
+
+
+(defthm diamond-semantics-correct
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'diamond))
+           (iff (pdl-satisfies m w f)
+                (prog-accessible-worlds m w (second f)))))
+              
+
+
+
 
