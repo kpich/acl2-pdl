@@ -348,9 +348,12 @@
           (t nil))))
 
 ; takes a model m, world w and program p and returns the p-accessible worlds
-; from w in m.
+
 (defun prog-accessible-worlds (m w p)
-  (remove-duplicates (nth w (pdl-prog-value m p))))
+  (nth w (pdl-prog-value m p)))
+
+
+;  (remove-duplicates (nth w (pdl-prog-value m p))))
 
   
 ; FORMULAS
@@ -507,56 +510,85 @@
                                    nil))
            (pdl-satisfies m w f)))
 
+(defthm diamond-sem-lemma2-kinda
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'diamond)
+                (pdl-satisfies m w f))
+           (pdl-satisfies-aux
+            m
+            w
+            (third f)
+            (prog-accessible-worlds m w (second f))
+            nil)))
 
-
-; here
-
-
-
-(defun-sk diamond-sem-lemma1-sk (m w p f)
-  (exists w2 (and (member w2 (prog-accessible-worlds m w p))
-                  (pdl-satisfies m w f))))
-
-
-;(in-theory (disable diamond-sem-lemma1-sk diamond-sem-lemma1-sk-suff))
-
-
-
-;  (implies (diamond-sem-lemma1-sk m w p f)
-;           (pdl-satisfies m w (list 'diamond p f)))
-;)
- ; :hints (("Goal" 
-  ;         :use ((:instance (:definition diamond-sem-lemma1-sk))
-   ;              (:instance (pdl-satisfies-aux
-    ;                         (m m)
-     ;                        (w w)
-      ;                       (f (list 'diamond p f))
-       ;                      (worlds (cons (diamond-sem-lemma1-sk-witness
-        ;                                    (prog-accessible-worlds m w p))))
-         ;                    (evaling-formula nil)))))))
-
-
-
-;here
-
-
+(defthm diamond-sem-kinda
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'diamond))
+           (equal (pdl-satisfies m w f)
+                  (pdl-satisfies-aux m
+                                     w
+                                     (third f)
+                                     (prog-accessible-worlds m w (second f))
+                                     nil))))
 
 
 ; Now we verify the semantics of programs.
 
-
-
-
-;following is ok
 
 (defthm atomic-prog-value-is-correct
   (implies (symbolp p)
            (equal (pdl-prog-value m p) (cdr (assoc p (get-atomic-programs
                                                       (get-frame m)))))))
 
+(defthm composition-right-length
+  (equal (len r1) (len (rel-compose r1 r2))))
 
-;following is garbage
+(defthm union-right-length
+  (equal (len r1) (len (rel-union r1 r2))))
 
+;here
+
+(defthm star-right-length
+  (equal (len (rel-star r)) (len r))
+  :hints (("Goal" :in-theory (disable transitive-closure))))
+
+
+
+(thm (implies (member a (nth n (rel-compose r1 r2)))
+              (
+
+
+;(defun composition-of-single-rel (rel r2)
+;  (if (consp rel)
+;      (append (nth (car rel) r2)
+;            (composition-of-single-rel (cdr rel) r2))
+;    nil))
+;
+;(defun rel-compose (r1 r2)
+;  (if (consp r1)
+;      (cons (composition-of-single-rel (car r1) r2)
+;            (rel-compose (cdr r1) r2))
+;    nil))
+
+
+
+(defthm foo
+  (implies (equal (nth n A
+
+(defthm composition-prog-value-correct
+ (implies (and (equal (len p) 3)
+               (equal (first p) 'compose)
+               (member w2 (nth w1 (pdl-prog-value m (second p))))
+               (member w3 (nth w2 (pdl-prog-value m (third p)))))
+          (member w3 (nth w1 (pdl-prog-value m p)))))
+
+
+(defthm composition-prog-value-correct
+ (implies (and (equal (len p) 3)
+               (equal (first p) 'compose)
+               (member w2 (prog-accessible-worlds m w1 (second p)))
+               (member w3 (prog-accessible-worlds m w2 (third p))))
+          (member w3 (prog-accessible-worlds m w1 p))))
 
 
 
@@ -586,35 +618,12 @@
 
 
 
-; Correctness of semantics of complex programs:
-
-
-
-; we want to prove two things.
-;
-; First, compose-sem-lemma1:
-;     \exists w' [ M,w' \models \phi \and w R_{\pi} w' ] \implies
-;     M,W \models <\pi> \phi.
-;
-; Second, the contrapositive of its converse, which we call compose-sem-lemma2:
-;     \forall w' \neg [ M,w' \models \phi \and wR_{\pi}w' ] \implies
-;     M,w \not\models <\pi> \phi.
-
-
-
-
-
-;;; BELOW IS GARBAGE
-
-
-
 (defun-sk diamond-sk (m w1 f)
   (exists w (and (member w (prog-accessible-worlds m w1 (second f)))
                  (pdl-satisfies m w (third f)))))
 
 (in-theory (disable diamond-sk diamond-sk-suff))
 
-; here
 
 ; should be iff or equal...
 (defthm diamond-semantics-weakly-correct
