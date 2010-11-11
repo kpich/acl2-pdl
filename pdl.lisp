@@ -554,9 +554,8 @@
                   (- (len r) i))))
 
 (defthm star-right-length
-  (equal (len (rel-star r)) (len r))
-  :hints (("Goal" 
-           :in-theory (disable transitive-closure))))
+  (equal (len (rel-star r)) (len r)))
+
 
 ;here
 
