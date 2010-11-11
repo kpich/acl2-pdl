@@ -291,19 +291,17 @@
                                                   new-rels))))
       world-rel)))
 
-; so the variable r doesn't really do anything here but make the termination
-; proof straightforward (structural induction vs. induction on a natp). the
-; variable i here is the index of the world (in entire-r) that we're currently
-; examining.
-(defun rel-star-with-index (r i entire-r)
-  (if (consp r)
-      (cons (cons i (transitive-closure i entire-r))
-            (rel-star-with-index (cdr r) (+ 1 i) entire-r))
+
+(defun rel-star-with-index (i r)
+  (declare (xargs :measure (nfix (- (len r) (nfix i)))))
+  (if (< (nfix i) (len r))
+      (cons (cons i (transitive-closure i r))
+            (rel-star-with-index (+ 1 (nfix i)) r))
     nil))
 
 ; takes a list of lists of ints, returns its reflexive transitive closure.
 (defun rel-star (r)
-  (rel-star-with-index r 0 r))
+  (rel-star-with-index 0 r))
 
 ; takes a list of lists of ints, returns the list of unions (so if L1= <A B C>
 ; and L2 = <D E F>, this returns <AuD BuE CuF>).
@@ -541,21 +539,26 @@
                                                       (get-frame m)))))))
 
 (defthm composition-right-length
-  (equal (len r1) (len (rel-compose r1 r2))))
+  (equal (len (rel-compose r1 r2))
+         (len r1)))
 
 (defthm union-right-length
-  (equal (len r1) (len (rel-union r1 r2))))
+  (equal (len (rel-union r1 r2))
+         (len r1)))
 
-;here
+; needed to prove star-right-length
+(defthm rel-star-with-index-gives-proper-len
+  (implies (and (natp i)
+                (<= i (len r)))
+           (equal (len (rel-star-with-index i r))
+                  (- (len r) i))))
 
 (defthm star-right-length
   (equal (len (rel-star r)) (len r))
-  :hints (("Goal" :in-theory (disable transitive-closure))))
+  :hints (("Goal" 
+           :in-theory (disable transitive-closure))))
 
-
-
-(thm (implies (member a (nth n (rel-compose r1 r2)))
-              (
+;here
 
 
 ;(defun composition-of-single-rel (rel r2)
