@@ -147,7 +147,6 @@
 (defun get-prop-atoms (m) (nth 2 m))
 (defun get-prog-atoms (m) (nth 3 m))
 
-; returns t if li is a list of true-listps of strings, nil otherwise.
 (defun symbol-list-listp (li)
   (if (endp li)
       t
@@ -538,6 +537,8 @@
            (equal (pdl-prog-value m p) (cdr (assoc p (get-atomic-programs
                                                       (get-frame m)))))))
 
+; complex programs are right length:
+
 (defthm composition-right-length
   (equal (len (rel-compose r1 r2))
          (len r1)))
@@ -557,7 +558,23 @@
   (equal (len (rel-star r)) (len r)))
 
 
+(defthm rel-union-behaves-like-union
+ (implies (and (natp n)
+           (< n (len A)))
+          (iff (member x (nth n (rel-union A B)))
+               (or (member x (nth n A)) (member x (nth n B))))))
+
+(defthm union-prog-value-correct
+  (implies (and (equal (len p) 3)
+                (equal (first p) 'union)
+                (natp w)
+                (< w (len (pdl-prog-value m (second p)))))
+           (iff (member v (prog-accessible-worlds m w p))
+                (or (member v (prog-accessible-worlds m w (second p)))
+                    (member v (prog-accessible-worlds m w (third p)))))))
+                
 ;here
+
 
 
 ;(defun composition-of-single-rel (rel r2)
@@ -574,8 +591,6 @@
 
 
 
-(defthm foo
-  (implies (equal (nth n A
 
 (defthm composition-prog-value-correct
  (implies (and (equal (len p) 3)
