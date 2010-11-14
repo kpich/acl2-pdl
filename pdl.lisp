@@ -550,7 +550,7 @@
 ; needed to prove star-right-length
 (defthm rel-star-with-index-gives-proper-len
   (implies (and (natp i)
-                (<= i (len r)))
+                (< i (len r)))
            (equal (len (rel-star-with-index i r))
                   (- (len r) i))))
 
@@ -575,6 +575,40 @@
                 
 ;here
 
+;star prog is reflexive
+
+(thm
+ (implies (and (natp w)
+               (<= w (len A)))
+          (member w (nth w (rel-star A)))))
+
+
+(thm
+ (implies (and (equal (len p) 2)
+;               (natp w)
+);               (< w (len (pdl-prog-value m (second p)))))
+          (member w (prog-accessible-worlds m w p))))
+
+
+;star prog is transitive
+
+;actual diamond semantics
+(thm
+ (implies (and (natp w)
+               (pdl-programp p (get-prog-atoms m))
+               (< w (len (pdl-prog-value m p)))
+               (member v (prog-accessible-worlds m w p))
+               (pdl-satisfies m w (list 'diamond p f)))
+          (pdl-satisfies m v f)))
+
+(defthm union-semantics-correct
+  (implies (and (equal (len p) 3)
+                (equal (first p) 'union)
+                (natp w)
+                (< w (len (pdl-prog-value m (second p)))))
+           (iff (pdl-satisfies m w (list 'diamond p f))
+                (or (pdl-satisfies m w (list 'diamond (second p) f))
+                    (pdl-satisfies m w (list 'diamond (third p) f))))))
 
 
 ;(defun composition-of-single-rel (rel r2)
