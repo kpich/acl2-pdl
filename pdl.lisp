@@ -572,14 +572,222 @@
            (iff (member v (prog-accessible-worlds m w p))
                 (or (member v (prog-accessible-worlds m w (second p)))
                     (member v (prog-accessible-worlds m w (third p)))))))
-                
+
+
+
+
+
 ;here
 
+;correctness of union semantics
+
+
+
+(defthm diamond-semantics-correct
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'diamond)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+           (implies (pdl-satisfies m w f)
+                    (and (member v (prog-accessible-worlds m w (second f)))
+                         (pdl-satisfies m v f)))))
+
+
+
+
+(thm
+ (implies (and (equal (len p) 3)
+               (equal (first p) 'union)
+               (natp w)
+               (< w (len (pdl-prog-value m (second p)))))
+          (implies (pdl-satisfies m w (list 'diamond p f))
+                   (or (pdl-satisfies m w (list 'diamond (second p) f))
+                       (pdl-satisfies m w (list 'diamond (third p) f))))))
+
+
+;proves; so where does this get us?
+;NB this is exactly "diamond-sem-kinda"
+(thm
+ (implies (and (equal (len f) 3)
+               (equal (first f) 'diamond))
+          (iff (pdl-satisfies m w f)
+               (pdl-satisfies-aux m 
+                                  w 
+                                  (third f) 
+                                  (prog-accessible-worlds m w (second f))
+                                  nil))))
+
+
+(thm
+ (implies (and (equal (len f) 3)
+               (equal (first f) 'diamond))
+          (implies (pdl-satisfies-aux m
+                                      w
+                                      (third f)
+                                      (prog-accessible-worlds m w (second f))
+                                      nil)
+                   (and (pdl-satisfies-aux m v (third f) nil t)
+                        (member v (prog-accessible-worlds m w (second f)))))))
+
+
+
+(defun pdl-satisfies-aux (m w f worlds evaling-formula)
+  (declare (xargs :well-founded-relation l<
+                  :measure (list (acl2-count f) (acl2-count worlds))))
+  (if evaling-formula
+      (cond ((atom f)
+             (pdl-satisfies-symbol m w f))
+            ((equal (len f) 2)
+             (not (pdl-satisfies-aux m w (second f) worlds t)))
+            ((equal (len f) 3)
+             (cond ((equal (first f) 'v)
+                    (or (pdl-satisfies-aux m w (second f) worlds t)
+                        (pdl-satisfies-aux m w (third f) worlds t)))
+                   ((equal (first f) 'diamond)
+                    (pdl-satisfies-aux
+                     m
+                     w
+                     (third f)
+                     (prog-accessible-worlds m w (second f))
+                     nil))))
+            (t nil))
+    (if (consp worlds)
+        (if (pdl-satisfies-aux m (car worlds) f nil t)
+            t
+          (pdl-satisfies-aux m w f (cdr worlds) nil))
+      nil)))
+
+
+
+
+                
 ;star prog is reflexive
+
+
+(defthm indiv-elems-of-rel-star-look-correct
+ (implies (and (natp i)
+               (< i (len R)))
+          (member (cons i (transitive-closure i R))
+                  (rel-star-with-index i R))))
+
+
+
+
+
+
+(defun foo (i r)
+  (declare (xargs :measure (nfix (- (len r) (nfix i)))))
+  (if (< (nfix i) (len r))
+      (cons i
+            (foo (+ 1 (nfix i)) r))
+    nil))
+
+
+(defthm foolemma1
+  (implies (and (natp i)
+                (< i (len R)))
+           (consp (foo i R))))
+
+(defun foolemma4-induction (i r)
+  (if (zp i)
+      r
+    (foolemma4-induction (- i 1) r)))
+
+(defthm foolemma4
+  (implies (and (natp i)
+                (< i (len R)))
+           (equal (nth i (foo 0 R)) i))
+  :hints (("Goal"
+           :induct (foolemma4-induction i R))))
+
+
+
+
+
+;proves
+(defthm foolemma3
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (car (foo i R)) 
+                 i)))
+
+
+(defthm foolemma2
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth 0 (foo 0 R)) 0)))
+
+;kindahere
+
+
+(defthm foolemma2-5
+ (implies (and (natp i)
+               (< 1 (len R)))
+          (equal (nth 1 (foo 0 R)) 1)))
+
+
+
+
+
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth i (foo 0 R)) i))
+ :hints (("Goal"
+          :induct (foo i R))))
+
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth i (rel-star-with-index i R))
+                 (cons i (transitive-closure i R)))))
+
+          
+
+
+
+          (equal (nth i (rel-star-with-index i R))
+                 (cons i (transitive-closure i R))))
+ :hints (("Goal"
+          :in-theory (disable transitive-closure)
+          :induct (rel-star-with-index i R))))
+
+
+
+          (member i (nth i (rel-star-with-index i R))))
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (member i (nth i (rel-star-with-index i R))))
+ :hints (("Goal" :induct (rel-star-with-index i R))))
+
+
+(defun rel-star-with-index (i r)
+  (declare (xargs :measure (nfix (- (len r) (nfix i)))))
+  (if (< (nfix i) (len r))
+      (cons (cons i (transitive-closure i r))
+            (rel-star-with-index (+ 1 (nfix i)) r))
+    nil))
+
+(defun one-incr (i li)
+  (if (< i (len li))
+      (one-incr (+ 1 i) li)
+    i))
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (member i (rel-star-with-index i R))))
 
 (thm
  (implies (and (natp w)
-               (<= w (len A)))
+               (< w (len A)))
           (member w (nth w (rel-star A)))))
 
 
