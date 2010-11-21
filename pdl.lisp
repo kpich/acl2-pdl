@@ -195,8 +195,8 @@
 
 (defun pdl-symbolp (s)
   (and (symbolp s)
-       (not (member s '(~ v ^ -> not 
-                        diamond box 
+       (not (member s '(~ v 
+                        box 
                         true false 
                         union star compose)))))
 
@@ -226,10 +226,10 @@
          (let ((first (first f))
                (second (second f))
                (third (third f)))
-           (or (and (member first '(v ^ ->))
+           (or (and (equal first 'v)
                     (pdl-formulap second prop-atoms prog-atoms)
                     (pdl-formulap third prop-atoms prog-atoms))
-               (and (member first '(diamond box))
+               (and (equal first 'box)
                     (pdl-programp second prog-atoms)
                     (pdl-formulap third prop-atoms prog-atoms)))))
         (t nil)))
@@ -250,8 +250,10 @@
            (cond ((equal first 'v)
                   (list 'v (simplify-formula second)
                         (simplify-formula third)))
+                 ((equal first 'box)
+                  (list 'box second (simplify-formula third)))
                  ((equal first 'diamond)
-                  (list 'diamond second (simplify-formula third)))
+                  (list '~ 'box second (list '~ (simplify-formula third))))
                  ((equal first '^)
                   (list '~ (list 'v
                                  (list '~ (simplify-formula second))
@@ -260,10 +262,7 @@
                   (list 'v
                         (list '~ (simplify-formula second))
                         (simplify-formula third)))
-                 (t
-                  (list '~ (list 'diamond
-                                 second
-                                 (list '~ (simplify-formula third))))))))))
+                 (t f))))))
              
     
 
@@ -389,20 +388,19 @@
            (cond ((equal (first f) 'v)
                   (or (pdl-satisfies-mutual m w (second f) worlds)
                       (pdl-satisfies-mutual m w (third f) worlds)))
-                 ((equal (first f) 'diamond)
-                  (pdl-satisfies-diamond-mutual
+                 ((equal (first f) 'box)
+                  (pdl-satisfies-box-mutual
                    m
                    (prog-accessible-worlds m w (second f))
                    (third f)))))
           (t nil)))
-  (defun pdl-satisfies-diamond-mutual (m p-accessible-worlds f)
+  (defun pdl-satisfies-box-mutual (m p-accessible-worlds f)
     (declare (xargs :measure (list (acl2-count f)
                                    (acl2-count p-accessible-worlds))))
     (if (consp p-accessible-worlds)
-        (if (pdl-satisfies-mutual m (car p-accessible-worlds) f nil)
-            t
-          (pdl-satisfies-diamond-mutual m (cdr p-accessible-worlds) f))
-      nil))))
+        (and (pdl-satisfies-mutual m (car p-accessible-worlds) f nil)
+             (pdl-satisfies-box-mutual m (cdr p-accessible-worlds) f))
+      t))))
 
 
 ; ...and here is the non-mutually-recursive equivalent that we WILL end up
@@ -427,7 +425,7 @@
              (cond ((equal (first f) 'v)
                     (or (pdl-satisfies-aux m w (second f) worlds t)
                         (pdl-satisfies-aux m w (third f) worlds t)))
-                   ((equal (first f) 'diamond)
+                   ((equal (first f) 'box)
                     (pdl-satisfies-aux
                      m
                      w
@@ -436,10 +434,9 @@
                      nil))))
             (t nil))
     (if (consp worlds)
-        (if (pdl-satisfies-aux m (car worlds) f nil t)
-            t
-          (pdl-satisfies-aux m w f (cdr worlds) nil))
-      nil)))
+        (and (pdl-satisfies-aux m (car worlds) f nil t)
+             (pdl-satisfies-aux m w f (cdr worlds) nil))
+      t)))
 
 
 
@@ -476,60 +473,8 @@
                       (pdl-satisfies m w (third f))))))
 
 
-
-; Diamond semantics.
-;
-; Now,
-;    M,w \models <\pi> \phi
-;    iff
-;    \exists w' [ wR_{\pi}w' \wedge M,w' \models \phi.
-;
-; We therefore prove the two statements of the biconditional separately:
-;
-; diamond-sem-lemma1:
-;    \exists w2 [wR{\pi}w2 \wedge M,w2 \models \phi ]
-;    \rightarrow
-;    M,w \models <\pi> \phi
-;
-; diamond-sem-lemma2 (lemma1's converse's contrapositive):
-;    \forall w2 \neg [wR_{\pi}w2 \wedge M,w2 \models phi]
-;    \rightarrow
-;    M,w \not\models <\pi> \phi.
-
-
-(defthm diamond-sem-lemma1-kinda
-  (implies (and (equal (len f) 3)
-                (equal (first f) 'diamond)
-                (pdl-satisfies-aux m 
-                                   w 
-                                   (third f) 
-                                   (prog-accessible-worlds m w (second f))
-                                   nil))
-           (pdl-satisfies m w f)))
-
-(defthm diamond-sem-lemma2-kinda
-  (implies (and (equal (len f) 3)
-                (equal (first f) 'diamond)
-                (pdl-satisfies m w f))
-           (pdl-satisfies-aux
-            m
-            w
-            (third f)
-            (prog-accessible-worlds m w (second f))
-            nil)))
-
-(defthm diamond-sem-kinda
-  (implies (and (equal (len f) 3)
-                (equal (first f) 'diamond))
-           (equal (pdl-satisfies m w f)
-                  (pdl-satisfies-aux m
-                                     w
-                                     (third f)
-                                     (prog-accessible-worlds m w (second f))
-                                     nil))))
-
-
 ; Now we verify the semantics of programs.
+
 
 
 (defthm atomic-prog-value-is-correct
@@ -576,21 +521,477 @@
 
 
 
-
-;here
-
-;correctness of union semantics
-
-
-
-(defthm diamond-semantics-correct
+; this is one-half of the correctness of the box semantics. The converse also
+; kind of holds (though not quite -- the scope of the universal quantifier over
+; v is too big if we just naively take the converse without skolemizing).
+(defthm box-semantics-semicorrect
   (implies (and (equal (len f) 3)
-                (equal (first f) 'diamond)
+                (equal (first f) 'box)
                 (natp w)
                 (< w (len (pdl-prog-value m (second f)))))
            (implies (pdl-satisfies m w f)
-                    (and (member v (prog-accessible-worlds m w (second f)))
-                         (pdl-satisfies m v f)))))
+                    (implies (member v (prog-accessible-worlds m w (second f)))
+                             (pdl-satisfies m v (third f))))))
+
+
+
+
+
+;here
+
+
+
+
+
+;rel-star reflexive.
+
+(defthm rel-star-car-looks-right
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (car (rel-star-with-index i R))
+                 (cons i (transitive-closure i R)))))
+
+(defthm rel-star-caar-val-is-i
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (caar (rel-star-with-index i R)) i)))
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nthcdr i (rel-star-with-index 0 R))
+                 (rel-star-with-index i R)))
+ :hints (("Goal"
+          :in-theory (disable transitive-closure)
+          :induct (rel-star-refl-proof-induct i R))))
+
+
+
+
+
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (caar (rel-star-with-index i R))
+                 (- (len (rel-star-with-index i R))
+
+
+(defun rel-star-refl-proof-induct2 (i r)
+  (if (zp i)
+      r
+    (rel-star-refl-proof-induct2 (- i 1) r)))
+
+(defthm base
+  (implies (and (natp i)
+                (< i (len R)))
+           (equal (nth 0 (rel-star-with-index 0 R))
+                 (cons 0 (transitive-closure 0 R)))))
+
+(defthm ind
+  (implies (and (natp i)
+                (< (+ 1 i) (len R)))
+           (implies
+            (equal (nth i (rel-star-with-index 0 R))
+                   (cons i (transitive-closure i R)))
+            (equal (nth (+ 1 i) (rel-star-with-index 0 R))
+                   (cons (+ 1 i) (transitive-closure (+ 1 i) R))))))
+
+
+
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth i (rel-star-with-index 0 R))
+                 (cons i (transitive-closure i R))))
+  :hints (("Goal"
+          :in-theory (disable transitive-closure)
+          :induct (rel-star-with-index i R))))
+
+
+
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (caar (nth i (rel-star-with-index 0 R)))
+                 i))
+ :hints (("Goal"
+          :in-theory (disable transitive-closure)
+          :induct (rel-star-refl-proof-induct2 i R))))
+
+                 
+
+
+(defun rel-star-refl-proof-induct (i r)
+  (declare (xargs :measure (nfix (- (len r) (nfix i)))))
+  (if (< (nfix i) (len r))
+      (rel-star-refl-proof-induct (+ 1 (nfix i)) r)
+    nil))
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth i (rel-star-with-index 0 R))
+                 (cons i (transitive-closure i R))))
+ :hints (("Goal"
+          :in-theory (disable transitive-closure)
+          :induct (rel-star-refl-proof-induct i R))))
+
+
+
+          :induct (rel-star-with-index i R))))
+ 
+
+
+(thm foo
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth 0 (rel-star-with-index 0 R))
+                 (cons 0 (transitive-closure 0 R)))))
+
+
+(thm
+ (member
+
+
+(defun transitive-closure (world-index rels)
+  (let ((world-rel (nth world-index rels)))
+    (if (consp world-rel)
+        (let ((new-rels (update-nth world-index
+                                    (cdr world-rel)
+                                    rels)))
+          (cons (car world-rel) 
+                      (append (transitive-closure world-index
+                                                  new-rels)
+                              (transitive-closure (car world-rel)
+                                                  new-rels))))
+      world-rel)))
+
+
+(defun rel-star-with-index (i r)
+  (declare (xargs :measure (nfix (- (len r) (nfix i)))))
+  (if (< (nfix i) (len r))
+      (cons (cons i (transitive-closure i r))
+            (rel-star-with-index (+ 1 (nfix i)) r))
+    nil))
+
+; takes a list of lists of ints, returns its reflexive transitive closure.
+(defun rel-star (r)
+  (rel-star-with-index 0 r))
+
+
+
+
+
+
+
+
+
+; So everything below here can be considered garbage.
+
+
+
+(defun pdl-satisfies-aux-tmp (m w f worlds evaling-formula)
+  (declare (xargs :well-founded-relation l<
+                  :measure (list (acl2-count f) (acl2-count worlds))))
+  (if evaling-formula
+      (cond ((atom f)
+             (pdl-satisfies-symbol m w f))
+            ((equal (len f) 2)
+             (not (pdl-satisfies-aux-tmp m w (second f) worlds t)))
+            ((equal (len f) 3)
+             (cond ((equal (first f) 'v)
+                    (or (pdl-satisfies-aux-tmp m w (second f) worlds t)
+                        (pdl-satisfies-aux-tmp m w (third f) worlds t)))
+                   ((equal (first f) 'diamond)
+                    (pdl-satisfies-aux-tmp
+                     m
+                     w
+                     (third f)
+                     (prog-accessible-worlds m w (second f))
+                     nil))))
+            (t nil))
+    (if (consp worlds)
+        (if (pdl-satisfies-aux-tmp m (car worlds) f nil t)
+            t
+          (pdl-satisfies-aux-tmp m w f (cdr worlds) nil))
+      nil)))
+
+;kbp best formulation (still bad! would work for diamond.)
+(defthm box-semantics-correct-r-to-l-diamond
+  (let ((ws (prog-accessible-worlds m w (second f))))
+    (implies (and (equal (len f) 3)
+                  (equal (first f) 'diamond)
+                  (natp w)
+                  (< w (len (pdl-prog-value m (second f))))
+                  (natp i)
+                  (< i (len ws)))
+             (implies (pdl-satisfies-aux-tmp m (nth i ws) (third f) nil t)
+                      (pdl-satisfies-aux-tmp m w f nil t)))))
+
+
+
+
+           (implies (implies (member v (prog-accessible-worlds m w (second f)))
+                             (pdl-satisfies m v (third f)))
+                    (pdl-satisfies m w f))))
+
+
+
+
+
+
+
+(defun-sk box-semantics-correct-r-l-sk (m w f worlds) 
+  (forall x (implies (member x worlds)
+                     (pdl-satisfies m w f))))
+
+(in-theory (disable box-semantics-correct-r-l-sk 
+                    box-semantics-correct-r-l-sk-necc))
+
+(defthm box-semantics-correct-r-to-l
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+           (let ((ws (prog-accessible-worlds m w (second f))))
+             (implies (box-semantics-correct-r-l-sk m w (third f) ws)
+                      (pdl-satisfies m w f))))
+  :hints (("Goal"
+           :use ((:instance box-semantics-correct-r-l-sk-necc
+                            (x (box-semantics-correct-r-l-sk-witness
+                                m
+                                w
+                                (third f)
+                                ws)))))))
+
+
+
+           (implies (implies (member v (prog-accessible-worlds m w (second f)))
+                             (pdl-satisfies m v (third f)))
+                    (pdl-satisfies m w f))))
+
+
+
+(defthm box-semantics-correct-r-to-l-something
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+           (let ((ws (prog-accessible-worlds m w (second f))))
+             (implies (pdl-satisfies m v (third f))
+                      (or (not (member v ws))
+                          (pdl-satisfies m w f))))))
+
+
+
+
+
+
+
+
+(defthm box-semantics-correct-r-to-l
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+           (implies (implies (member v (prog-accessible-worlds m w (second f)))
+                             (pdl-satisfies m v (third f)))
+                    (pdl-satisfies m w f))))
+
+  :hints (("Goal"
+           :in-theory (disable prog-accessible-worlds))))
+
+;proves, but gets us nothing really
+(defthm box-semantics-correct-r-to-l-a
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+           (let ((ws (prog-accessible-worlds m w (second f))))
+             (implies (and (pdl-satisfies-aux m (car ws) (third f) nil t)
+                           (pdl-satisfies-aux m w (third f) (cdr ws) nil))
+                      (pdl-satisfies m w f)))))
+
+;proves!
+(defthm box-semantics-correct-r-to-l-b
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+           (let ((ws (prog-accessible-worlds m w (second f))))
+             (implies (and (pdl-satisfies-aux m (car ws) (third f) nil t)
+                           (pdl-satisfies-aux m w (third f) (cdr ws) nil))
+                      (implies (member v ws)
+                               (pdl-satisfies-aux m v (third f) nil t))))))
+
+(defun foo (A) (if A t nil))
+
+(defthm foolemma1
+ (implies (not (consp A)) (not (foo (car A)))))
+
+(thm
+ (implies (implies (member a B) (foo a))
+          (foo (car B))))
+
+;converse to b pt 1
+(defthm box-semantics-correct-r-to-l-c-i
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+;           (let ((ws (prog-accessible-worlds m w (second f))))
+             (implies (implies (member v ws)
+                               (pdl-satisfies-aux m v (third f) nil t))
+                      (pdl-satisfies-aux m (car ws) (third f) nil t))))
+;)
+
+;converse to b pt 2
+(defthm box-semantics-correct-r-to-l-c-ii
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+           (let ((ws (prog-accessible-worlds m w (second f))))
+             (implies (implies (member v ws)
+                               (pdl-satisfies-aux m v (third f) nil t))
+                      (pdl-satisfies-aux m w (third f) (cdr ws) nil)))))
+
+
+;                      (pdl-satisfies-aux m w f nil t)))))
+
+
+
+
+
+
+(defun pdl-satisfies-aux (m w f worlds evaling-formula)
+  (declare (xargs :well-founded-relation l<
+                  :measure (list (acl2-count f) (acl2-count worlds))))
+  (if evaling-formula
+      (cond ((atom f)
+             (pdl-satisfies-symbol m w f))
+            ((equal (len f) 2)
+             (not (pdl-satisfies-aux m w (second f) worlds t)))
+            ((equal (len f) 3)
+             (cond ((equal (first f) 'v)
+                    (or (pdl-satisfies-aux m w (second f) worlds t)
+                        (pdl-satisfies-aux m w (third f) worlds t)))
+                   ((equal (first f) 'diamond)
+                    (pdl-satisfies-aux
+                     m
+                     w
+                     (third f)
+                     (prog-accessible-worlds m w (second f))
+                     nil))))
+            (t nil))
+    (if (consp worlds)
+        (and (pdl-satisfies-aux m (car worlds) f nil t)
+             (pdl-satisfies-aux m w f (cdr worlds) nil))
+      t)))
+
+
+
+(defun pdl-satisfies (m w f)
+  (pdl-satisfies-aux m w f nil t))
+
+
+
+
+
+;proves
+(defthm box-semantics-correct-r-to-l-lemma1a
+ (implies (and (equal (len f) 3)
+               (equal (first f) 'box)
+               (natp w))
+          (implies (pdl-satisfies-aux m w f ws nil)
+                   (implies (member v ws)
+                            (pdl-satisfies-aux m v f nil t)))))
+
+;total garbage!
+(defthm box-semantics-correct-r-to-l-lemma1b
+ (implies (and (equal (len f) 3)
+               (equal (first f) 'box)
+               (natp w)
+               (< w (len ws))
+               (< v (len ws)))
+          (implies 
+           (implies (member v ws)
+                    (pdl-satisfies-aux m v f nil t))
+           (pdl-satisfies-aux m w f ws nil))))
+
+
+
+
+
+
+
+
+; Diamond semantics.
+;
+; Now,
+;    M,w \models <\pi> \phi
+;    iff
+;    \exists w' [ wR_{\pi}w' \wedge M,w' \models \phi.
+;
+; We therefore prove the two statements of the biconditional separately:
+;
+; diamond-sem-lemma1:
+;    \exists w2 [wR{\pi}w2 \wedge M,w2 \models \phi ]
+;    \rightarrow
+;    M,w \models <\pi> \phi
+;
+; diamond-sem-lemma2 (lemma1's converse's contrapositive):
+;    \forall w2 \neg [wR_{\pi}w2 \wedge M,w2 \models phi]
+;    \rightarrow
+;    M,w \not\models <\pi> \phi.
+
+
+;doesn't prove
+(defthm diamond-sem-lemma1-kinda
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (pdl-satisfies-aux m 
+                                   w 
+                                   (third f) 
+                                   (prog-accessible-worlds m w (second f))
+                                   nil))
+           (pdl-satisfies m w f)))
+
+;proves
+(defthm diamond-sem-lemma2-kinda
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (pdl-satisfies m w f))
+           (pdl-satisfies-aux
+            m
+            w
+            (third f)
+            (prog-accessible-worlds m w (second f))
+            nil)))
+
+;doesn't prove
+(defthm diamond-sem-kinda
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box))
+           (equal (pdl-satisfies m w f)
+                  (pdl-satisfies-aux m
+                                     w
+                                     (third f)
+                                     (prog-accessible-worlds m w (second f))
+                                     nil))))
+
+
+
+;correctness of union semantics
+
 
 
 
@@ -628,35 +1029,6 @@
                                       nil)
                    (and (pdl-satisfies-aux m v (third f) nil t)
                         (member v (prog-accessible-worlds m w (second f)))))))
-
-
-
-(defun pdl-satisfies-aux (m w f worlds evaling-formula)
-  (declare (xargs :well-founded-relation l<
-                  :measure (list (acl2-count f) (acl2-count worlds))))
-  (if evaling-formula
-      (cond ((atom f)
-             (pdl-satisfies-symbol m w f))
-            ((equal (len f) 2)
-             (not (pdl-satisfies-aux m w (second f) worlds t)))
-            ((equal (len f) 3)
-             (cond ((equal (first f) 'v)
-                    (or (pdl-satisfies-aux m w (second f) worlds t)
-                        (pdl-satisfies-aux m w (third f) worlds t)))
-                   ((equal (first f) 'diamond)
-                    (pdl-satisfies-aux
-                     m
-                     w
-                     (third f)
-                     (prog-accessible-worlds m w (second f))
-                     nil))))
-            (t nil))
-    (if (consp worlds)
-        (if (pdl-satisfies-aux m (car worlds) f nil t)
-            t
-          (pdl-satisfies-aux m w f (cdr worlds) nil))
-      nil)))
-
 
 
 
