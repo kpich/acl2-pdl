@@ -349,8 +349,6 @@
   (nth w (pdl-prog-value m p)))
 
 
-;  (remove-duplicates (nth w (pdl-prog-value m p))))
-
   
 ; FORMULAS
 
@@ -518,22 +516,6 @@
                 (or (member v (prog-accessible-worlds m w (second p)))
                     (member v (prog-accessible-worlds m w (third p)))))))
 
-
-
-
-; this is one-half of the correctness of the box semantics. The converse also
-; kind of holds (though not quite -- the scope of the universal quantifier over
-; v is too big if we just naively take the converse without skolemizing).
-(defthm box-semantics-semicorrect
-  (implies (and (equal (len f) 3)
-                (equal (first f) 'box)
-                (natp w)
-                (< w (len (pdl-prog-value m (second f)))))
-           (implies (pdl-satisfies m w f)
-                    (implies (member v (prog-accessible-worlds m w (second f)))
-                             (pdl-satisfies m v (third f))))))
-
-
 (defthm membership-preserved-under-append
   (implies (member x A)
            (member x (append B A))))
@@ -555,9 +537,100 @@
                          (member y (nth x B)))
                     (member y (nth n (rel-compose A B))))))
 
+(defthm compose-prog-value-semicorrect
+  (implies (and (equal (len p) 3)
+                (equal (first p) 'compose)
+                (natp w)
+                (< w (len (pdl-prog-value m (second p)))))
+           (implies (and (member x (prog-accessible-worlds m w (second p)))
+                         (member y (prog-accessible-worlds m x (third p))))
+                    (member y (prog-accessible-worlds m w p)))))
 
+
+
+; this is one-half of the correctness of the box semantics. The converse also
+; kind of holds (though not quite -- the scope of the universal quantifier over
+; v is too big if we just naively take the converse without skolemizing).
+(defthm box-semantics-semicorrect
+  (implies (and (equal (len f) 3)
+                (equal (first f) 'box)
+                (natp w)
+                (< w (len (pdl-prog-value m (second f)))))
+           (implies (pdl-satisfies m w f)
+                    (implies (member v (prog-accessible-worlds m w (second f)))
+                             (pdl-satisfies m v (third f))))))
+
+
+(defthm union-formula-satisfied-implies-disjunction-of-membership-satisfies
+  (let ((first (first f))
+        (second (second f))
+        (third (third f)))
+    (implies (and (equal (len f) 3)
+                  (equal first 'box)
+                  (equal (len second) 3)
+                  (equal (first second) 'union)
+                  (natp w)
+                  (< w (len (pdl-prog-value m second))))
+             (implies
+              (pdl-satisfies m w f)
+              (implies
+               (or (member v (prog-accessible-worlds m w (second second)))
+                   (member v (prog-accessible-worlds m w (third second))))
+               (pdl-satisfies m v third)))))
+  :hints (("Goal"
+           :in-theory (disable box-semantics-semicorrect)
+           :use ((:instance box-semantics-semicorrect
+                            (m m) (w w) (f f) (v v))))))
 
 ;here
+
+
+
+(defthm union-implies-disjunction-of-membership
+ (let ((first (first f))
+       (second (second f)))
+   (implies (and (equal (len f) 3)
+                 (equal first 'box)
+                 (equal (len second) 3)
+                 (equal (first second) 'union)
+                 (natp w)
+                 (< w (len (pdl-prog-value m second))))
+            (implies
+             (pdl-satisfies m w f)
+             (implies
+              (member v (prog-accessible-worlds m w second))
+              (or (member v (prog-accessible-worlds m w (second second)))
+                  (member v (prog-accessible-worlds m w (third second)))))))))
+
+
+; half of correctness of program satisfiability semantics (we can't get the
+; other half until we get the other half of the box semantics correctness).
+
+(thm
+ (let ((first (first f))
+       (second (second f))
+       (third (third f)))
+   (implies (and (equal (len f) 3)
+                 (equal first 'box)
+                 (equal (len second) 3)
+                 (equal (first second) 'union)
+                 (natp w)
+                 (< w (len (pdl-prog-value m second))))
+            (implies
+             (pdl-satisfies m w f)
+             (or (pdl-satisfies m w (list 'box (second second) third))
+                 (pdl-satisfies m w (list 'box (third second) third)))))))
+
+(defthm union-prog-value-correct
+  (implies (and (equal (len p) 3)
+                (equal (first p) 'union)
+                (natp w)
+                (< w (len (pdl-prog-value m (second p)))))
+           (iff (member v (prog-accessible-worlds m w p))
+                (or (member v (prog-accessible-worlds m w (second p)))
+                    (member v (prog-accessible-worlds m w (third p)))))))
+
+
 
 
 
