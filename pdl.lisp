@@ -534,6 +534,26 @@
                              (pdl-satisfies m v (third f))))))
 
 
+(defthm membership-preserved-under-append
+  (implies (member x A)
+           (member x (append B A))))
+
+(defthm single-rel-composition-semicorrect
+  (implies (and (natp x)
+                (< x (len R2)))
+           (implies (and (member x A)
+                         (member y (nth x R2)))
+                    (member y (composition-of-single-rel A R2)))))
+
+(defthm rel-compose-semicorrect
+  (implies (and (natp n)
+                (< n (len A))
+                (< x (len B))
+                (integer-list-listp A)
+                (integer-list-listp B))
+           (implies (and (member x (nth n A))
+                         (member y (nth x B)))
+                    (member y (nth n (rel-compose A B))))))
 
 
 
@@ -542,6 +562,217 @@
 
 
 
+
+;composition reference
+
+(defthm rel-union-behaves-like-union
+ (implies (and (natp n)
+           (< n (len A)))
+          (iff (member x (nth n (rel-union A B)))
+               (or (member x (nth n A)) (member x (nth n B))))))
+
+(defthm union-prog-value-correct
+  (implies (and (equal (len p) 3)
+                (equal (first p) 'union)
+                (natp w)
+                (< w (len (pdl-prog-value m (second p)))))
+           (iff (member v (prog-accessible-worlds m w p))
+                (or (member v (prog-accessible-worlds m w (second p)))
+                    (member v (prog-accessible-worlds m w (third p)))))))
+
+
+(defun composition-of-single-rel (rel r2)
+  (if (consp rel)
+      (append (nth (car rel) r2)
+            (composition-of-single-rel (cdr rel) r2))
+    nil))
+
+(defun rel-compose (r1 r2)
+  (if (consp r1)
+      (cons (composition-of-single-rel (car r1) r2)
+            (rel-compose (cdr r1) r2))
+    nil))
+
+
+
+; defines the semantics of a program. Takes a model m and a program p (we
+; assume that (modelp m) and (pdl-programp p)).
+(defun pdl-prog-value (m p)
+  (let ((f (get-frame m)))
+    (cond ((symbolp p)
+           (cdr (assoc p (get-atomic-programs f))))
+          ((equal (len p) 2)
+           (rel-star (pdl-prog-value m (second p))))
+          ((equal (len p) 3)
+           (let ((first (first p))
+                 (second (second p))
+                 (third (third p)))
+             (cond ((equal first 'union)
+                    (rel-union (pdl-prog-value m second)
+                               (pdl-prog-value m third)))
+                   ((equal first 'compose)
+                    (rel-compose (pdl-prog-value m second)
+                                 (pdl-prog-value m third))))))
+          (t nil))))
+
+; takes a model m, world w and program p and returns the p-accessible worlds
+
+(defun prog-accessible-worlds (m w p)
+  (nth w (pdl-prog-value m p)))
+
+
+;end composition reference
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; REFLEXIVITY TOY EXAMPLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun foo (i r)
+  (declare (xargs :measure (nfix (- (len r) (nfix i)))))
+  (if (< (nfix i) (len r))
+      (cons i
+            (foo (+ 1 (nfix i)) r))
+    nil))
+
+(defun fooindsch (i r)
+  (if (zp i)
+      r
+    (fooindsch (- i 1) r)))
+
+
+(defthm foobase
+  (implies (and (natp i)
+                (< i (len R)))
+           (equal (nth 0 (foo 0 R)) (car (foo 0 R)))))
+
+(defun foo2 (i n)
+  (declare (xargs :measure (nfix (- (nfix n) (nfix i)))))
+  (if (< (nfix i) (nfix n))
+      (cons i
+            (foo2 (+ 1 (nfix i)) (nfix n)))
+    nil))
+
+
+
+
+
+(defun foo3 (i)
+  (if (zp i)
+      (list 0)
+    (append (foo3 (- i 1)) (list i))))
+
+
+(thm
+ (implies (and (natp i)
+               (natp n)
+               (<= 0 n))
+          (equal (nth 0 (foo3 n)) 0)))
+
+(defun foo3indsch (i)
+  (if (zp i)
+      0
+    (foo3indsch (- i 1))))
+
+(defthm foo3car
+ (implies (natp i)
+          (equal (car (foo3 i)) 0)))
+
+(thm
+ (implies (and (natp i))
+          (equal (nth i (foo3 i)) i)))
+
+(thm
+ (implies (and (natp i)
+               (not (zp i))
+               (natp n)
+               (<= i n)
+               (equal (nth (- i 1) (foo3 n)) (- i 1)))
+          (equal (nth i (foo3 n)) i)))
+
+ :hints (("Goal"
+          :induct (foo3indsch n))))
+
+
+(defthm foo2carlooksright
+ (implies (and (natp i)
+               (natp n)
+               (< i n))
+          (equal (car (foo2 i n)) i)))
+
+(defthm foo2carissuccessor
+ (implies (and (natp i)
+               (natp n)
+               (< i n)
+               (< (+ i 1) n ))
+          (equal (car (foo2 (+ i 1) n))
+                 (+ (car (foo2 i n)) 1))))
+
+(defthm foo2carbasecase
+  (implies (and (natp n)
+                (< 0 n))
+           (equal (car (foo2 0 n)) 0)))
+
+(defthm foo2iscons
+ (implies (and (natp i)
+               (natp n)
+               (< i n))
+          (consp (foo2 i n))))
+
+(thm
+ (implies (and (natp i)
+               (natp n)
+               (< i n))
+          (equal (nthcdr i (foo2 0 n))
+                 (foo2 i n)))
+ :hints (("Goal"
+          :induct (foo2 i n))))
+
+
+(thm
+ (implies (and (natp i)
+               (natp n)
+               (< i n)
+               (< (+ i 1) n))
+          (equal (nth (+ i 1) (foo2 0 n))
+                 (+ (nth i (foo2 0 n)) 1)))
+ :hints (("Goal"
+          :induct (foo2 i n))))
+
+
+(thm
+ (implies (and (natp i)
+               (natp n)
+               (< i n)
+               (< (+ i 1) n))
+          (equal (nth i (foo2 0 n))
+                 i)))
+ :hints (("Goal"
+          :induct (fooind i R))))
+
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth i (foo 0 R)) (car (foo i R)))))
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth i (foo 0 R)) (car (foo i R))))
+ :hints (("Goal"
+          :induct (fooind i R))))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; REFLEXIVITY
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;rel-star reflexive.
 
@@ -557,17 +788,38 @@
           (equal (caar (rel-star-with-index i R)) i)))
 
 
+(defthm lemma1
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (cdr (rel-star-with-index i R))
+                 (rel-star-with-index (+ 1 i) R))))
+
 (thm
  (implies (and (natp i)
                (< i (len R)))
-          (equal (nthcdr i (rel-star-with-index 0 R))
-                 (rel-star-with-index i R)))
+          (equal (nth i (rel-star-with-index 0 R))
+                 (car (rel-star-with-index i R))))
  :hints (("Goal"
           :in-theory (disable transitive-closure)
-          :induct (rel-star-refl-proof-induct i R))))
+          :induct (rel-star-with-index i R))))
 
 
 
+(defun rel-star-refl-proof-induct3 (i r)
+  (declare (xargs :guard (natp i)))
+  (if (equal i 0)
+      r
+    (rel-star-refl-proof-induct3 (- i 1) r)))
+
+;kbp
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth i (rel-star-with-index 0 R))
+                 (cons i (transitive-closure i R))))
+ :hints (("Goal"
+          :in-theory (disable transitive-closure)
+          :induct (rel-star-refl-proof-induct2 i R))))
 
 
 
@@ -575,8 +827,14 @@
 (thm
  (implies (and (natp i)
                (< i (len R)))
-          (equal (caar (rel-star-with-index i R))
-                 (- (len (rel-star-with-index i R))
+          (equal (car (nth i (rel-star-with-index 0 R)))
+                 i))
+ :hints (("Goal"
+          :in-theory (disable transitive-closure)
+          :induct (rel-star-refl-proof-induct2 i R))))
+
+
+
 
 
 (defun rel-star-refl-proof-induct2 (i r)
@@ -692,6 +950,10 @@
 
 
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; BOX SEMANTICS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ; So everything below here can be considered garbage.
