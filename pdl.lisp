@@ -561,7 +561,7 @@
                              (pdl-satisfies m v (third f))))))
 
 
-(defthm union-formula-satisfied-implies-disjunction-of-membership-satisfies
+(defthm union-satisfiability-semicorrect
   (let ((first (first f))
         (second (second f))
         (third (third f)))
@@ -582,44 +582,81 @@
            :use ((:instance box-semantics-semicorrect
                             (m m) (w w) (f f) (v v))))))
 
-;here
-
-
-
-(defthm union-implies-disjunction-of-membership
+(defthm composition-satisfiability-semicorrect-lemma1
  (let ((first (first f))
        (second (second f)))
    (implies (and (equal (len f) 3)
                  (equal first 'box)
                  (equal (len second) 3)
-                 (equal (first second) 'union)
+                 (equal (first second) 'compose)
                  (natp w)
                  (< w (len (pdl-prog-value m second))))
             (implies
              (pdl-satisfies m w f)
              (implies
-              (member v (prog-accessible-worlds m w second))
-              (or (member v (prog-accessible-worlds m w (second second)))
-                  (member v (prog-accessible-worlds m w (third second)))))))))
+              (and (member x (prog-accessible-worlds m w (second second)))
+                   (member y (prog-accessible-worlds m x (third second))))
+              (member y (prog-accessible-worlds m w second))))))
+ :hints (("Goal"
+          :in-theory (disable compose-prog-value-semicorrect)
+          :use ((:instance compose-prog-value-semicorrect
+                           (m m) (w w) (p (second f)) (x x) (y y))))))
 
-
-; half of correctness of program satisfiability semantics (we can't get the
-; other half until we get the other half of the box semantics correctness).
-
-(thm
+(defthm composition-satisfiability-semicorrect-lemma2
  (let ((first (first f))
        (second (second f))
        (third (third f)))
    (implies (and (equal (len f) 3)
                  (equal first 'box)
                  (equal (len second) 3)
-                 (equal (first second) 'union)
+                 (equal (first second) 'compose)
                  (natp w)
                  (< w (len (pdl-prog-value m second))))
             (implies
              (pdl-satisfies m w f)
-             (or (pdl-satisfies m w (list 'box (second second) third))
-                 (pdl-satisfies m w (list 'box (third second) third)))))))
+             (implies (member y (prog-accessible-worlds m w second))
+                      (pdl-satisfies m y third)))))
+ :hints (("Goal"
+          :in-theory (disable box-semantics-semicorrect)
+          :use ((:instance box-semantics-semicorrect
+                           (m m) (w w) (f f) (v y))))))
+
+(defthm composition-satisfiability-semicorrect
+ (let ((first (first f))
+       (second (second f))
+       (third (third f)))
+   (implies (and (equal (len f) 3)
+                 (equal first 'box)
+                 (equal (len second) 3)
+                 (equal (first second) 'compose)
+                 (natp w)
+                 (< w (len (pdl-prog-value m second))))
+            (implies
+             (pdl-satisfies m w f)
+             (implies
+              (and (member x (prog-accessible-worlds m w (second second)))
+                   (member y (prog-accessible-worlds m x (third second))))
+              (pdl-satisfies m y third)))))
+ :hints (("Goal"
+          :in-theory (disable composition-satisfiability-semicorrect-lemma1
+                              composition-satisfiability-semicorrect-lemma2)
+          :use ((:instance composition-satisfiability-semicorrect-lemma1
+                           (m m) (w w) (f f) (x x) (y y))
+                (:instance composition-satisfiability-semicorrect-lemma2
+                           (m m) (w w) (f f) (y y))))))
+
+
+
+;here
+
+
+
+
+
+; half of correctness of program satisfiability semantics (we can't get the
+; other half until we get the other half of the box semantics correctness).
+
+
 
 (defthm union-prog-value-correct
   (implies (and (equal (len p) 3)
@@ -704,6 +741,27 @@
 ; REFLEXIVITY TOY EXAMPLE
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+
+(defun bar (n)
+  (if (zp n)
+      (list 0)
+    (append (bar (- n 1)) (list n))))
+
+(defthm barlemma1
+  (implies (and (natp i))
+           (equal (car (bar i)) i)))
+
+
+(thm
+ (implies (and (natp i))
+          (equal (nth i (bar n))
+                 i))
+ :hints (("Goal"
+          :induct (bar i))))
+
+
+
+
 (defun foo (i r)
   (declare (xargs :measure (nfix (- (len r) (nfix i)))))
   (if (< (nfix i) (len r))
@@ -715,6 +773,91 @@
   (if (zp i)
       r
     (fooindsch (- i 1) r)))
+
+(defthm foolemma2
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (car (foo i R)) i)))
+
+
+
+
+;base2
+(defthm foolemmabase2
+ (implies (and (natp i)
+               (< i (len R))
+               (zp i))
+          (equal (nthcdr i (foo 0 R))
+                 (cons i (foo (+ 1 (nfix i)) R)))))
+
+;ind 
+(thm
+ (implies (and (natp i)
+               (< i (len R))
+               (not (zp i))
+               (equal (nthcdr (+ -1 i) (foo 0 R))
+                      (cons (+ -1 i) (foo (+ 1 (nfix (+ -1 i))) R))))
+          (equal (nthcdr i (foo 0 R))
+                 (cons i (foo (+ 1 (nfix i)) R))))
+ :hints (("Goal"
+          :induct (foo i R))))
+
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nthcdr i (foo 0 R))
+                 (cons i (foo (+ 1 (nfix i)) R))))
+ :hints (("Goal"
+          :induct (foo i R))))
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nthcdr i (foo 0 R))
+                 (cons i (foo (+ 1 (nfix i)) R))))
+ :hints (("Goal"
+          :induct (fooindsch i R))))
+
+
+
+
+
+(defthm foolemma1
+ (implies (< 0 (len R))
+          (consp (foo 0 R))))
+
+;base
+(defthm foolemmabase
+ (implies (and (natp i)
+               (< i (len R))
+               (zp i))
+          (equal (nth i (foo 0 R))
+                 i)))
+
+;ind
+(thm
+ (implies (and (natp i)
+               (< i (len R))
+               (not (zp i))
+               (equal (nth (+ -1 i) (foo 0 R))
+                      (+ -1 i)))
+          (equal (nth i (foo 0 R))
+                 i)))
+
+
+(thm
+ (implies (and (natp i)
+               (< i (len R)))
+          (equal (nth i (foo 0 R))
+                 i))
+ :hints (("Goal"
+          :induct (fooindsch i R))))
+
+
+
 
 
 (defthm foobase
